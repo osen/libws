@@ -18,7 +18,7 @@ int main()
       if(event.type == WS_CONNECT)
       {
         printf("Client connected\n");
-        WsSend(event.connection, "Welcome", 7);
+        //WsSend(event.connection, "Welcome", 7);
       }
       else if(event.type == WS_MESSAGE)
       {
@@ -26,7 +26,7 @@ int main()
           (int)event.message->length,
           event.message->data);
 
-        WsSend(event.connection, event.message->data, event.message->length);
+        //WsSend(event.connection, event.message->data, event.message->length);
       }
       else if(event.type == WS_DISCONNECT)
       {

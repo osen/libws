@@ -35,7 +35,7 @@ struct WsConnection
 
 char *_WsHandshakeResponse(char *request);
 unsigned char *_WsHandshakeAccept(char *wsKey);
-char* _WsDecodeFrame(char *frame, size_t length, int *type);
+char* _WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen, size_t *end);
 
 struct WsServer *WsListen(int port)
 {
@@ -133,7 +133,8 @@ int _WsPollSend(struct WsConnection *connection)
     return 0;
   }
 
-  bw = write(connection->fd, connection->outgoing, connection->outgoingLength);
+  //bw = write(connection->fd, connection->outgoing, connection->outgoingLength);
+  bw = send(connection->fd, connection->outgoing, connection->outgoingLength, MSG_NOSIGNAL);
 
   if(bw == -1)
   {
@@ -225,13 +226,10 @@ int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection, s
 
 int _WsPollReceive(struct WsServer *server, struct WsConnection *connection, struct WsEvent *event)
 {
-  if(connection->incomingLength < 1)
-  {
-    return 0;
-  }
-
   int type = 0;
-  char *msg = _WsDecodeFrame(connection->incoming, connection->incomingLength, &type);
+  size_t decodeLen = 0;
+  size_t end = 0;
+  char *msg = _WsDecodeFrame(connection->incoming, connection->incomingLength, &type, &decodeLen, &end);
 
   if(msg)
   {
@@ -241,17 +239,12 @@ int _WsPollReceive(struct WsServer *server, struct WsConnection *connection, str
     event->connection = connection;
     event->message = &server->message;
     memcpy(event->message->data, msg, msgLen);
+    free(msg);
     event->message->length = msgLen;
 
-    /*
-    connection->incomingLength -= nextStart;
-    memmove(connection->incoming, connection->incoming + nextStart, connection->incomingLength);
+    connection->incomingLength -= end;
+    memmove(connection->incoming, connection->incoming + end, connection->incomingLength);
     memset(connection->incoming + connection->incomingLength, 0, WS_MESSAGE_SIZE - connection->incomingLength);
-    */
-
-    // TODO: Trim rather than wipe
-    memset(connection->incoming, 0, sizeof(*connection->incoming));
-    connection->incomingLength = 0;
 
     return 1;
   }

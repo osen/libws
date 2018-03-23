@@ -73,7 +73,7 @@ char *_WsHandshakeResponse(char *request)
   return rtn;
 }
 
-char* _WsDecodeFrame(char *frame, size_t length, int *type)
+char* _WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen, size_t *end)
 {
   char *msg;              /* Decoded message.        */
   uint8_t mask;           /* Payload is masked?      */
@@ -82,15 +82,18 @@ char* _WsDecodeFrame(char *frame, size_t length, int *type)
   uint8_t idx_first_data; /* Index data.             */
   size_t data_length;     /* Data length.            */
   uint8_t masks[4];       /* Masking key.            */
-  int i,j;                /* Loop indexes.           */
+  size_t i,j;             /* Loop indexes.           */
   unsigned char *uframe = frame;
 
   msg = NULL;
+
+  if(length < 1) return NULL;
 
   if(uframe[0] == (WS_FIN | WS_FR_OP_TXT) )
   {
     *type = WS_FR_OP_TXT;
     idx_first_mask = 2;
+    if(length < 2) return NULL;
     mask = uframe[1];
     flength = mask & 0x7F;
 
@@ -103,17 +106,24 @@ char* _WsDecodeFrame(char *frame, size_t length, int *type)
       idx_first_mask = 10;
     }
 
+    data_length = flength;
+    *decodeLen = data_length;
     idx_first_data = idx_first_mask + 4;
-    data_length = length - idx_first_data;
+    *end = idx_first_data + data_length;
+
+    if(*end > length)
+    {
+      return NULL;
+    }
 
     masks[0] = uframe[idx_first_mask+0];
     masks[1] = uframe[idx_first_mask+1];
     masks[2] = uframe[idx_first_mask+2];
     masks[3] = uframe[idx_first_mask+3];
 
-    msg = malloc(sizeof(unsigned char) * (data_length+1) );
+    msg = malloc(sizeof(unsigned char) * (data_length + 1));
 
-    for(i = idx_first_data, j = 0; i < length; i++, j++)
+    for(i = idx_first_data, j = 0; i < *end; i++, j++)
     {
       msg[j] = uframe[i] ^ masks[j % 4];
     }

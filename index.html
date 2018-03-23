@@ -9,7 +9,10 @@ window.onload = function()
 
   socket.addEventListener('open', function (event) {
     console.log("Connection opened");
-    socket.send('Hello Server!');
+    for(var i = 0; i < 5; i++)
+    {
+      socket.send('Hello Server!');
+    }
   });
 
   socket.addEventListener('message', function (event) {
