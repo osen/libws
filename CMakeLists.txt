@@ -7,6 +7,9 @@ include_directories(
 
 add_library(ws
   src/ws/ws.c
+  src/ws/base64.c
+  src/ws/sha1.c
+  src/ws/handshake.c
 )
 
 add_executable(simple

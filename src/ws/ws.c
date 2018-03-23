@@ -33,6 +33,10 @@ struct WsConnection
   struct WsConnection *prev;
 };
 
+char *_WsHandshakeResponse(char *request);
+unsigned char *_WsHandshakeAccept(char *wsKey);
+char* _WsDecodeFrame(char *frame, size_t length, int *type);
+
 struct WsServer *WsListen(int port)
 {
   struct WsServer *rtn = NULL;
@@ -192,16 +196,6 @@ int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection, s
       nextStart = i + 4;
       break;
     }
-
-    if(connection->incoming[i] == 'h' &&
-      connection->incoming[i + 1] == 'i' &&
-      connection->incoming[i + 2] == 'h' &&
-      connection->incoming[i + 3] == '\n')
-    {
-      headerFound = 1;
-      nextStart = i + 4;
-      break;
-    }
   }
 
   if(!headerFound)
@@ -209,13 +203,18 @@ int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection, s
     return 0;
   }
 
-  printf("Header: %s\n", connection->incoming);
+  char *request = strdup(connection->incoming);
+  char *response = _WsHandshakeResponse(request);
+  free(request);
+  WsSend(connection, response, strlen(response));
+
+  //printf("Header: %s\n", connection->incoming);
 
   connection->incomingLength -= nextStart;
   memmove(connection->incoming, connection->incoming + nextStart, connection->incomingLength);
   memset(connection->incoming + connection->incomingLength, 0, WS_MESSAGE_SIZE - connection->incomingLength);
 
-  printf("[%i] [%s]\n", (int)connection->incomingLength, connection->incoming);
+  //printf("[%i] [%s]\n", (int)connection->incomingLength, connection->incoming);
   connection->established = 1;
 
   event->type = WS_CONNECT;
@@ -231,16 +230,46 @@ int _WsPollReceive(struct WsServer *server, struct WsConnection *connection, str
     return 0;
   }
 
-  event->type = WS_MESSAGE;
-  event->connection = connection;
-  event->message = &server->message;
-  memcpy(event->message->data, connection->incoming, connection->incomingLength);
-  event->message->length = connection->incomingLength;
+  int type = 0;
+  char *msg = _WsDecodeFrame(connection->incoming, connection->incomingLength, &type);
 
-  memset(connection->incoming, 0, sizeof(*connection->incoming));
-  connection->incomingLength = 0;
+  if(msg)
+  {
+    size_t msgLen = strlen(msg);
 
-  return 1;
+    event->type = WS_MESSAGE;
+    event->connection = connection;
+    event->message = &server->message;
+    memcpy(event->message->data, msg, msgLen);
+    event->message->length = msgLen;
+
+    /*
+    connection->incomingLength -= nextStart;
+    memmove(connection->incoming, connection->incoming + nextStart, connection->incomingLength);
+    memset(connection->incoming + connection->incomingLength, 0, WS_MESSAGE_SIZE - connection->incomingLength);
+    */
+
+    // TODO: Trim rather than wipe
+    memset(connection->incoming, 0, sizeof(*connection->incoming));
+    connection->incomingLength = 0;
+
+    return 1;
+  }
+/*
+  else
+  {
+    connection->disconnected = 1;
+    if(!connection->established) return 0;
+    event->disconnect = &server->disconnect;
+    event->disconnect->reason = WS_CLOSED;
+    event->type = WS_DISCONNECT;
+    event->connection = connection;
+
+    return 1;
+  }
+*/
+
+  return 0;
 }
 
 int _WsPollConnection(struct WsServer *server, struct WsConnection *connection, struct WsEvent *event)
