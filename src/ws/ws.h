@@ -6,9 +6,10 @@
 #define WS_MESSAGE_SIZE 2048
 #define WS_CLIENT_QUEUE 8
 
-#define WS_CONNECT 1
-#define WS_MESSAGE 2
-#define WS_DISCONNECT 3
+#define WS_HTTP_REQUEST 1
+#define WS_CONNECT 2
+#define WS_MESSAGE 3
+#define WS_DISCONNECT 4
 
 #define WS_CLOSED 1
 #define WS_OVERFLOW 2
@@ -37,7 +38,7 @@ struct WsEvent
 };
 
 struct WsServer *WsListen(int port);
-int WsSend(struct WsConnection *connection, char *message, size_t length);
+int WsSend(struct WsConnection *connection, const char *message, size_t length);
 int WsPoll(struct WsServer *server, struct WsEvent *event);
 void WsClose(struct WsServer *server);
 

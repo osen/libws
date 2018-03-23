@@ -60,6 +60,11 @@ char *_WsHandshakeResponse(char *request)
 
   s = strtok(s,    " ");
   s = strtok(NULL, " ");
+
+  if(!s)
+  {
+    return NULL;
+  }
 	
   accept = _WsHandshakeAccept(s);
 

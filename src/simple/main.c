@@ -3,6 +3,29 @@
 #include <unistd.h>
 
 #include <stdio.h>
+#include <string.h>
+
+const char *payload =
+  "<html><head><title>WebSocket Test</title><script>"
+  "window.onload = function()"
+  "{"
+  "  var socket = new WebSocket('ws://'+location.host);"
+
+  "  socket.addEventListener('open', function(event)"
+  "  {"
+  "    console.log('Connection opened');"
+  "    for(var i = 0; i < 5; i++)"
+  "    {"
+  "      socket.send('Hello Server!');"
+  "    }"
+  "  });"
+
+  "  socket.addEventListener('message', function(event)"
+  "  {"
+  "    console.log('Message from server ', event.data);"
+  "  });"
+  "};"
+  "</script> </head> <body> </body> </html>";
 
 int main()
 {
@@ -15,7 +38,11 @@ int main()
   {
     while(WsPoll(server, &event))
     {
-      if(event.type == WS_CONNECT)
+      if(event.type == WS_HTTP_REQUEST)
+      {
+        WsSend(event.connection, payload, strlen(payload));
+      }
+      else if(event.type == WS_CONNECT)
       {
         printf("Client connected\n");
         //WsSend(event.connection, "Welcome", 7);

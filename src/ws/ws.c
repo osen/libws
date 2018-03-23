@@ -23,6 +23,7 @@ struct WsConnection
 {
   int fd;
   int established;
+  int www;
   int disconnected;
   char incoming[WS_MESSAGE_SIZE];
   size_t incomingLength;
@@ -132,6 +133,11 @@ int _WsPollSend(struct WsConnection *connection)
 
   if(connection->outgoingLength == 0)
   {
+    if(connection->www)
+    {
+      connection->disconnected = 1;
+    }
+
     return 0;
   }
 
@@ -168,20 +174,42 @@ int _WsPollSend(struct WsConnection *connection)
  * Returns 1 if an error has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int WsSend(struct WsConnection *connection, char *message, size_t length)
+int WsSend(struct WsConnection *connection, const char *message, size_t length)
 {
   if(_WsPollSend(connection) != 0)
   {
     return 1;
   }
 
-  if(connection->outgoingLength + length > WS_MESSAGE_SIZE - 1)
+  if(!connection->www)
   {
-    return 1;
-  }
+    if(connection->outgoingLength + length > WS_MESSAGE_SIZE - 1)
+    {
+      return 1;
+    }
 
-  memcpy(connection->outgoing + connection->outgoingLength, message, length);
-  connection->outgoingLength += length;
+    memcpy(connection->outgoing + connection->outgoingLength, message, length);
+    connection->outgoingLength += length;
+  }
+  else
+  {
+    sprintf(connection->outgoing,
+      "HTTP/1.1 200 OK\r\n"
+      "Content-Type: text/html\r\n"
+      "Content-Length: %i\r\n"
+      "Connection: close\r\n"
+      "\r\n", (int)length);
+
+    connection->outgoingLength = strlen(connection->outgoing);
+
+    if(connection->outgoingLength + length > WS_MESSAGE_SIZE - 1)
+    {
+      return 1;
+    }
+
+    memcpy(connection->outgoing + connection->outgoingLength, message, length);
+    connection->outgoingLength += length;
+  }
 
   if(_WsPollSend(connection) != 0)
   {
@@ -240,21 +268,30 @@ int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection,
   char *response = _WsHandshakeResponse(request);
   free(request);
 
-  // TODO: Do we want to handle != 0?
-  WsSend(connection, response, strlen(response));
-
-  connection->incomingLength -= nextStart;
-
-  memmove(connection->incoming, connection->incoming + nextStart,
-    connection->incomingLength);
-
-  memset(connection->incoming + connection->incomingLength, 0,
-    WS_MESSAGE_SIZE - connection->incomingLength);
-
   connection->established = 1;
-
-  event->type = WS_CONNECT;
   event->connection = connection;
+
+  if(response)
+  {
+    // TODO: Do we want to handle != 0?
+    WsSend(connection, response, strlen(response));
+    free(response);
+
+    connection->incomingLength -= nextStart;
+
+    memmove(connection->incoming, connection->incoming + nextStart,
+      connection->incomingLength);
+
+    memset(connection->incoming + connection->incomingLength, 0,
+      WS_MESSAGE_SIZE - connection->incomingLength);
+
+    event->type = WS_CONNECT;
+  }
+  else
+  {
+    event->type = WS_HTTP_REQUEST;
+    connection->www = 1;
+  }
 
   return 1;
 }
@@ -347,6 +384,7 @@ int _WsPollConnection(struct WsServer *server,
   {
     connection->disconnected = 1;
     if(!connection->established) return 0;
+    if(connection->www) return 0;
     event->disconnect = &server->disconnect;
     event->disconnect->reason = WS_NOSEND;
     event->type = WS_DISCONNECT;
@@ -370,6 +408,7 @@ int _WsPollConnection(struct WsServer *server,
     {
       connection->disconnected = 1;
       if(!connection->established) return 0;
+      if(connection->www) return 0;
       event->disconnect = &server->disconnect;
       event->disconnect->reason = WS_OVERFLOW;
       event->type = WS_DISCONNECT;
@@ -384,6 +423,7 @@ int _WsPollConnection(struct WsServer *server,
     {
       connection->disconnected = 1;
       if(!connection->established) return 0;
+      if(connection->www) return 0;
       event->disconnect = &server->disconnect;
       event->disconnect->reason = WS_CLOSED;
       event->type = WS_DISCONNECT;
@@ -401,6 +441,11 @@ int _WsPollConnection(struct WsServer *server,
   if(!connection->established)
   {
     return _WsPollHandshake(server, connection, event);
+  }
+
+  if(connection->www)
+  {
+    return 0;
   }
 
   return _WsPollReceive(server, connection, event);
