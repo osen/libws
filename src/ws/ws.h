@@ -12,6 +12,7 @@
 
 #define WS_CLOSED 1
 #define WS_OVERFLOW 2
+#define WS_NOSEND 3
 
 struct WsServer;
 struct WsConnection;

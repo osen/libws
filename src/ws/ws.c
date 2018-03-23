@@ -175,7 +175,23 @@ int WsSend(struct WsConnection *connection, char *message, size_t length)
   return 0;
 }
 
-int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection, struct WsEvent *event)
+/****************************************************************************
+ * _WsPollHandshake
+ *
+ * If the header is complete, attempt handshake and send response. Ensure
+ * that if there was trailing data that we move it to the beginning of the
+ * buffer so that subsequent polls read it. Finally flag the connection as
+ * established and populate connected event.
+ *
+ * server     - The server structure containing the message placeholder.
+ * connection - The specific connection to process.
+ * event      - The event structure to populate.
+ *
+ * Returns 1 if an event has occurred otherwise returns 0.
+ *
+ ****************************************************************************/
+int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection,
+  struct WsEvent *event)
 {
   size_t i = 0;
   int headerFound = 0;
@@ -207,15 +223,18 @@ int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection, s
   char *request = strdup(connection->incoming);
   char *response = _WsHandshakeResponse(request);
   free(request);
+
+  // TODO: Do we want to handle != 0?
   WsSend(connection, response, strlen(response));
 
-  //printf("Header: %s\n", connection->incoming);
-
   connection->incomingLength -= nextStart;
-  memmove(connection->incoming, connection->incoming + nextStart, connection->incomingLength);
-  memset(connection->incoming + connection->incomingLength, 0, WS_MESSAGE_SIZE - connection->incomingLength);
 
-  //printf("[%i] [%s]\n", (int)connection->incomingLength, connection->incoming);
+  memmove(connection->incoming, connection->incoming + nextStart,
+    connection->incomingLength);
+
+  memset(connection->incoming + connection->incomingLength, 0,
+    WS_MESSAGE_SIZE - connection->incomingLength);
+
   connection->established = 1;
 
   event->type = WS_CONNECT;
@@ -224,12 +243,29 @@ int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection, s
   return 1;
 }
 
-int _WsPollReceive(struct WsServer *server, struct WsConnection *connection, struct WsEvent *event)
+/****************************************************************************
+ * _WsPollReceive
+ *
+ * Attempt to decode incoming. If it fails, make assumption that the rest
+ * of the data has not yet been received and continue. If data was decoded
+ * successfully then populate message event.
+ *
+ * server     - The server structure containing the message placeholder.
+ * connection - The specific connection to process.
+ * event      - The event structure to populate.
+ *
+ * Returns 1 if an event has occurred otherwise returns 0.
+ *
+ ****************************************************************************/
+int _WsPollReceive(struct WsServer *server, struct WsConnection *connection,
+  struct WsEvent *event)
 {
   int type = 0;
   size_t decodeLen = 0;
   size_t end = 0;
-  char *msg = _WsDecodeFrame(connection->incoming, connection->incomingLength, &type, &decodeLen, &end);
+
+  char *msg = _WsDecodeFrame(connection->incoming,
+    connection->incomingLength, &type, &decodeLen, &end);
 
   if(msg)
   {
@@ -243,8 +279,12 @@ int _WsPollReceive(struct WsServer *server, struct WsConnection *connection, str
     event->message->length = msgLen;
 
     connection->incomingLength -= end;
-    memmove(connection->incoming, connection->incoming + end, connection->incomingLength);
-    memset(connection->incoming + connection->incomingLength, 0, WS_MESSAGE_SIZE - connection->incomingLength);
+
+    memmove(connection->incoming, connection->incoming + end,
+      connection->incomingLength);
+
+    memset(connection->incoming + connection->incomingLength, 0,
+      WS_MESSAGE_SIZE - connection->incomingLength);
 
     return 1;
   }
@@ -265,7 +305,23 @@ int _WsPollReceive(struct WsServer *server, struct WsConnection *connection, str
   return 0;
 }
 
-int _WsPollConnection(struct WsServer *server, struct WsConnection *connection, struct WsEvent *event)
+/****************************************************************************
+ * _WsPollConnection
+ *
+ * Attempt to send outgoing. If there are any issues then disconnect. Read
+ * bytes into incoming buffer if there are any available. If the buffer
+ * becomes too large then disconnect the client. If connection is not
+ * established then try for handshake, otherwise process message as normal.
+ *
+ * server     - The server structure required for event system.
+ * connection - The specific connection to process.
+ * event      - The event structure to populate.
+ *
+ * Returns 1 if an event has occurred otherwise returns 0.
+ *
+ ****************************************************************************/
+int _WsPollConnection(struct WsServer *server,
+  struct WsConnection *connection, struct WsEvent *event)
 {
   fd_set readfds = {0};
   struct timeval tv = {0};
@@ -276,7 +332,7 @@ int _WsPollConnection(struct WsServer *server, struct WsConnection *connection, 
     connection->disconnected = 1;
     if(!connection->established) return 0;
     event->disconnect = &server->disconnect;
-    event->disconnect->reason = WS_CLOSED;
+    event->disconnect->reason = WS_NOSEND;
     event->type = WS_DISCONNECT;
     event->connection = connection;
     return 1;
@@ -334,28 +390,50 @@ int _WsPollConnection(struct WsServer *server, struct WsConnection *connection, 
   return _WsPollReceive(server, connection, event);
 }
 
-#define LL_REMOVE(ROOT, CURR) \
-{ \
-  void *toFree = NULL; \
-  if(!CURR->prev) \
-  { \
-    ROOT = CURR->next; \
-  } \
-  else \
-  { \
+/****************************************************************************
+ * WS_LL_REMOVE
+ *
+ * Remove a node from the given list whilst joining up the next and prev.
+ *
+ * ROOT - The root node.
+ * CURR - The current iterator.
+ *
+ ****************************************************************************/
+#define WS_LL_REMOVE(ROOT, CURR)   \
+{                                  \
+  void *toFree = NULL;             \
+  if(!CURR->prev)                  \
+  {                                \
+    ROOT = CURR->next;             \
+  }                                \
+  else                             \
+  {                                \
     CURR->prev->next = CURR->next; \
-  } \
- \
-  if(CURR->next) \
-  { \
+  }                                \
+                                   \
+  if(CURR->next)                   \
+  {                                \
     CURR->next->prev = CURR->prev; \
-  } \
- \
-  toFree = CURR; \
-  CURR = CURR->next; \
-  free(toFree); \
+  }                                \
+                                   \
+  toFree = CURR;                   \
+  CURR = CURR->next;               \
+  free(toFree);                    \
 }
 
+/****************************************************************************
+ * _WsPollConnections
+ *
+ * If any connections have been disconnected then remove them from the list.
+ * For any others, poll them for any events. If one occurs then immediately
+ * return it.
+ *
+ * server - The server structure containing the connections list.
+ * event  - The event structure to populate.
+ *
+ * Returns 1 if an event has occurred otherwise returns 0.
+ *
+ ****************************************************************************/
 int _WsPollConnections(struct WsServer *server, struct WsEvent *event)
 {
   struct WsConnection *conn = NULL;
@@ -367,7 +445,7 @@ int _WsPollConnections(struct WsServer *server, struct WsEvent *event)
     if(conn->disconnected)
     {
       close(conn->fd);
-      LL_REMOVE(server->connections, conn)
+      WS_LL_REMOVE(server->connections, conn)
       continue;
     }
 
@@ -382,8 +460,21 @@ int _WsPollConnections(struct WsServer *server, struct WsEvent *event)
   return 0;
 }
 
+/****************************************************************************
+ * WsPoll
+ *
+ * Poll the client sockets and listen socket for events. If any occurs then
+ * immediately return it.
+ *
+ * server - The server structure containing the listen socket.
+ * event  - The event structure to populate.
+ *
+ * Returns 1 if an event has occurred otherwise returns 0.
+ *
+ ****************************************************************************/
 int WsPoll(struct WsServer *server, struct WsEvent *event)
 {
+  // TODO: Only clear when needed
   memset(event, 0, sizeof(*event));
   memset(&server->disconnect, 0, sizeof(server->disconnect));
   memset(&server->message, 0, sizeof(server->message));
