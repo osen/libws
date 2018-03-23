@@ -73,23 +73,55 @@ char *_WsHandshakeResponse(char *request)
   return rtn;
 }
 
-char* _WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen, size_t *end)
+/****************************************************************************
+ * _WsDecodeFrame
+ *
+ * If first byte suggests a text frame, obtain the frame length to decide
+ * if enough bytes have been received for a complete message. If so add them
+ * to the decoded buffer whilst unmasking them and return it.
+ *
+ * [ type            ]
+ * [ length          ]
+ * < extended length >
+ * <                 >
+ * < extended length >
+ * <                 >
+ * <                 >
+ * <                 >
+ * [ mask 1          ]
+ * [ mask 2          ]
+ * [ mask 3          ]
+ * [ mask 4          ]
+ * < data            >
+ *
+ * frame     - The current buffer containing a potentially complete frame.
+ * length    - The lengh of data (to avoid strlen).
+ * type      - Output what the frame represented.
+ * decodeLen - Output the contained frames length (to avoid strlen).
+ * end       - Output the position of the first byte of the next message.
+ *
+ * Returns the decoded frames message.
+ *
+ ****************************************************************************/
+char *_WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen,
+  size_t *end)
 {
-  char *msg;              /* Decoded message.        */
-  uint8_t mask;           /* Payload is masked?      */
-  uint8_t flength;        /* Raw length.             */
-  uint8_t idx_first_mask; /* Index masking key.      */
-  uint8_t idx_first_data; /* Index data.             */
-  size_t data_length;     /* Data length.            */
-  uint8_t masks[4];       /* Masking key.            */
-  size_t i,j;             /* Loop indexes.           */
-  unsigned char *uframe = frame;
+  char *msg;              /* Decoded message.   */
+  uint8_t mask;           /* Payload is masked? */
+  uint8_t flength;        /* Raw length.        */
+  uint8_t idx_first_mask; /* Index masking key. */
+  uint8_t idx_first_data; /* Index data.        */
+  size_t data_length;     /* Data length.       */
+  uint8_t masks[4];       /* Masking key.       */
+  size_t i,j;             /* Loop indexes.      */
+  unsigned char *uframe;  /* Casted bytes       */
 
+  uframe = (unsigned char *)frame;
   msg = NULL;
 
   if(length < 1) return NULL;
 
-  if(uframe[0] == (WS_FIN | WS_FR_OP_TXT) )
+  if(uframe[0] == (WS_FIN | WS_FR_OP_TXT))
   {
     *type = WS_FR_OP_TXT;
     idx_first_mask = 2;
@@ -116,10 +148,10 @@ char* _WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen, s
       return NULL;
     }
 
-    masks[0] = uframe[idx_first_mask+0];
-    masks[1] = uframe[idx_first_mask+1];
-    masks[2] = uframe[idx_first_mask+2];
-    masks[3] = uframe[idx_first_mask+3];
+    masks[0] = uframe[idx_first_mask];
+    masks[1] = uframe[idx_first_mask + 1];
+    masks[2] = uframe[idx_first_mask + 2];
+    masks[3] = uframe[idx_first_mask + 3];
 
     msg = malloc(sizeof(unsigned char) * (data_length + 1));
 

@@ -35,7 +35,9 @@ struct WsConnection
 
 char *_WsHandshakeResponse(char *request);
 unsigned char *_WsHandshakeAccept(char *wsKey);
-char* _WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen, size_t *end);
+
+char *_WsDecodeFrame(char *frame, size_t length,
+  int *type, size_t *decodeLen, size_t *end);
 
 struct WsServer *WsListen(int port)
 {
@@ -152,6 +154,20 @@ int _WsPollSend(struct WsConnection *connection)
   return 0;
 }
 
+/****************************************************************************
+ * WsSend
+ *
+ * Attempt to send what is already in the outgoing buffer. If the new data
+ * to send is not too large for the buffer then add it and re-attempt to send
+ * the outgoing buffer again.
+ *
+ * connection - The specific connection to send the data.
+ * message    - The data in which to send.
+ * length     - The lengh of data (to avoid strlen).
+ *
+ * Returns 1 if an error has occurred otherwise returns 0.
+ *
+ ****************************************************************************/
 int WsSend(struct WsConnection *connection, char *message, size_t length)
 {
   if(_WsPollSend(connection) != 0)
