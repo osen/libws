@@ -25,7 +25,7 @@ const char *payload =
   "    console.log('Message from server ', event.data);"
   "  });"
   "};"
-  "</script> </head> <body> </body> </html>";
+  "</script></head><body></body></html>";
 
 int main()
 {
