@@ -149,7 +149,7 @@ int _WsPollSend(struct WsConnection *connection)
 
   if(bw == -1)
   {
-    return 1;
+    return 0;
   }
   else if(bw == 0)
   {
@@ -158,7 +158,11 @@ int _WsPollSend(struct WsConnection *connection)
 
   connection->outgoingLength -= bw;
   memmove(connection->outgoing, connection->outgoing + bw, connection->outgoingLength);
-  memset(connection->outgoing + connection->outgoingLength, 0, WS_MESSAGE_SIZE - connection->outgoingLength);
+
+  // Clear the rest of the buffer
+  //memset(connection->outgoing + connection->outgoingLength, 0, WS_MESSAGE_SIZE - connection->outgoingLength);
+
+  connection->outgoing[connection->outgoingLength] = '\0';
 
   return 0;
 }
@@ -377,8 +381,9 @@ int _WsPollReceive(struct WsServer *server, struct WsConnection *connection,
     memmove(connection->incoming, connection->incoming + end,
       connection->incomingLength);
 
-    memset(connection->incoming + connection->incomingLength, 0,
-      WS_MESSAGE_SIZE - connection->incomingLength);
+    // Clear the rest of the buffer
+    //memset(connection->incoming + connection->incomingLength, 0,
+    //  WS_MESSAGE_SIZE - connection->incomingLength);
 
     return 1;
   }
@@ -579,7 +584,7 @@ int WsPoll(struct WsServer *server, struct WsEvent *event)
   // TODO: Only clear when needed
   memset(event, 0, sizeof(*event));
   memset(&server->disconnect, 0, sizeof(server->disconnect));
-  memset(&server->message, 0, sizeof(server->message));
+  //memset(&server->message, 0, sizeof(server->message));
 
   if(_WsPollConnections(server, event))
   {

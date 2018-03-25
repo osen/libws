@@ -78,6 +78,32 @@ char *_WsHandshakeResponse(char *request)
   return rtn;
 }
 
+uint64_t f_uint64(uint8_t *value)
+{
+  int i = 0;
+  uint64_t length = 0;
+
+  for(i = 0; i < 8; i++)
+  {
+    length = (length << 8) | value[i];
+  }
+
+  return length;
+}
+
+uint16_t f_uint16(uint8_t *value)
+{
+  int i = 0;
+  uint16_t length = 0;
+
+  for(i = 0; i < 2; i++)
+  {
+    length = (length << 8) | value[i];
+  }
+
+  return length;
+}
+
 /****************************************************************************
  * _WsDecodeFrame
  *
@@ -137,10 +163,12 @@ char *_WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen,
     if(flength == 126)
     {
       idx_first_mask = 4;
+      flength = f_uint16(&frame[2]);
     }
     else if(flength == 127)
     {
       idx_first_mask = 10;
+      flength = f_uint64(&frame[2]);
     }
 
     data_length = flength;

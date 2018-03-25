@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define WS_MESSAGE_SIZE 2048
+#define WS_MESSAGE_SIZE 128 * 1024 * 1024
 #define WS_CLIENT_QUEUE 8
 
 #define WS_HTTP_REQUEST 1
@@ -44,5 +44,6 @@ void WsClose(struct WsServer *server);
 
 typedef struct WsServer WsServer;
 typedef struct WsEvent WsEvent;
+typedef struct WsConnection WsConnection;
 
 #endif
