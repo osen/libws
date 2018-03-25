@@ -14,6 +14,7 @@ const char *payload =
   "  socket.addEventListener('open', function(event)"
   "  {"
   "    console.log('Connection opened');"
+  "    document.body.innerHTML += 'Connection opened' + '<br />';"
   "    for(var i = 0; i < 5; i++)"
   "    {"
   "      socket.send('Hello Server!');"
@@ -22,7 +23,8 @@ const char *payload =
 
   "  socket.addEventListener('message', function(event)"
   "  {"
-  "    console.log('Message from server ', event.data);"
+  "    console.log('Message from server: ' + event.data);"
+  "    document.body.innerHTML += 'Message from server: ' + event.data + '<br />';"
   "  });"
   "};"
   "</script></head><body></body></html>";
@@ -45,7 +47,7 @@ int main()
       else if(event.type == WS_CONNECT)
       {
         printf("Client connected\n");
-        //WsSend(event.connection, "Welcome", 7);
+        WsSend(event.connection, "Welcome", 7);
       }
       else if(event.type == WS_MESSAGE)
       {
@@ -53,7 +55,7 @@ int main()
           (int)event.message->length,
           event.message->data);
 
-        //WsSend(event.connection, event.message->data, event.message->length);
+        WsSend(event.connection, event.message->data, event.message->length);
       }
       else if(event.type == WS_DISCONNECT)
       {

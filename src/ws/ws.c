@@ -11,6 +11,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#define WS_FIN 128
+#define WS_FR_OP_TXT  1
+
 struct WsServer
 {
   int fd;
@@ -183,13 +186,51 @@ int WsSend(struct WsConnection *connection, const char *message, size_t length)
 
   if(!connection->www)
   {
-    if(connection->outgoingLength + length > WS_MESSAGE_SIZE - 1)
+    unsigned char frame[10];  /* Frame.          */
+    uint8_t idx_first_rData;  /* Index data.     */
+    uint64_t len;             /* Message length. */
+    int idx_response;         /* Index response. */
+    int output;               /* Bytes sent.     */
+
+    /* Text data. */
+    len = length;
+    frame[0] = (WS_FIN | WS_FR_OP_TXT);
+
+    if (len <= 125)
     {
+      frame[1] = len & 0x7F;
+      idx_first_rData = 2;
+    }
+    else if (len >= 126 && len <= 65535)
+    {
+      frame[1] = 126;
+      frame[2] = (len >> 8) & 255;
+      frame[3] = len & 255;
+      idx_first_rData = 4;
+    }
+    else
+    {
+      frame[1] = 127;
+      frame[2] = (unsigned char) ((len >> 56) & 255);
+      frame[3] = (unsigned char) ((len >> 48) & 255);
+      frame[4] = (unsigned char) ((len >> 40) & 255);
+      frame[5] = (unsigned char) ((len >> 32) & 255);
+      frame[6] = (unsigned char) ((len >> 24) & 255);
+      frame[7] = (unsigned char) ((len >> 16) & 255);
+      frame[8] = (unsigned char) ((len >> 8) & 255);
+      frame[9] = (unsigned char) (len & 255);
+      idx_first_rData = 10;
+    }
+
+    if(connection->outgoingLength + idx_first_rData + length > WS_MESSAGE_SIZE - 1)
+    {
+      printf("Too large\n");
       return 1;
     }
 
-    memcpy(connection->outgoing + connection->outgoingLength, message, length);
-    connection->outgoingLength += length;
+    memcpy(connection->outgoing + connection->outgoingLength, frame, idx_first_rData);
+    memcpy(connection->outgoing + connection->outgoingLength + idx_first_rData, message, length);
+    connection->outgoingLength += idx_first_rData + length;
   }
   else
   {
