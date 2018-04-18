@@ -567,6 +567,40 @@ int _WsPollConnections(struct WsServer *server, struct WsEvent *event)
   return 0;
 }
 
+void _WsWaitForEvent(struct WsServer *server, int timeout)
+{
+  struct WsConnection *conn = NULL;
+  fd_set readfds = {0};
+  fd_set writefds = {0};
+  struct timeval tv = {0};
+  int maxFd = 0;
+
+  tv.tv_sec = timeout / 1000;
+  tv.tv_usec = timeout % 1000;
+
+  FD_ZERO(&readfds);
+  FD_ZERO(&writefds);
+
+  FD_SET(server->fd, &readfds);
+  maxFd = server->fd;
+  conn = server->connections;
+
+  while(conn)
+  {
+    FD_SET(conn->fd, &readfds);
+    if(maxFd < conn->fd) maxFd = conn->fd;
+
+    if(conn->outgoingLength > 0)
+    {
+      FD_SET(conn->fd, &writefds);
+    }
+
+    conn = conn->next;
+  }
+
+  select(maxFd, &readfds, &writefds, NULL, &tv);
+}
+
 /****************************************************************************
  * WsPoll
  *
@@ -579,12 +613,17 @@ int _WsPollConnections(struct WsServer *server, struct WsEvent *event)
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int WsPoll(struct WsServer *server, struct WsEvent *event)
+int WsPoll(struct WsServer *server, int timeout, struct WsEvent *event)
 {
   // TODO: Only clear when needed
   memset(event, 0, sizeof(*event));
   memset(&server->disconnect, 0, sizeof(server->disconnect));
   //memset(&server->message, 0, sizeof(server->message));
+
+  if(timeout > 0)
+  {
+    _WsWaitForEvent(server, timeout);
+  }
 
   if(_WsPollConnections(server, event))
   {

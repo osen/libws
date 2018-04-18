@@ -39,7 +39,7 @@ struct WsEvent
 
 struct WsServer *WsListen(int port);
 int WsSend(struct WsConnection *connection, const char *message, size_t length);
-int WsPoll(struct WsServer *server, struct WsEvent *event);
+int WsPoll(struct WsServer *server, int timeout, struct WsEvent *event);
 void WsClose(struct WsServer *server);
 
 typedef struct WsServer WsServer;
