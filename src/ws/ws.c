@@ -1,18 +1,36 @@
 #include "ws.h"
 
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/select.h>
+#ifdef _WIN32
+  #define USE_WINSOCK
+#else
+  #define USE_POSIX
+#endif
+
+#ifdef USE_POSIX
+  #include <sys/socket.h>
+  #include <arpa/inet.h>
+  #include <netinet/in.h>
+  #include <fcntl.h>
+  #include <unistd.h>
+  #include <sys/select.h>
+#endif
+
+#ifdef USE_WINSOCK
+  //#define WIN32_LEAN_AND_MEAN
+  //#include <windows.h>
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+#endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #define WS_FIN 128
 #define WS_FR_OP_TXT  1
+
+//#define MIN(a, b) (((a)<(b))?(a):(b))
 
 struct WsServer
 {
@@ -22,9 +40,22 @@ struct WsServer
   struct WsConnection *connections;
 };
 
+#ifdef USE_WINSOCK
+int _wsaInitialized;
+void _WsCleanupWinsock(void)
+{
+  WSACleanup();
+}
+#endif
+
 struct WsConnection
 {
+#ifdef USE_WINSOCK
+  SOCKET fd;
+#endif
+#ifdef USE_POSIX
   int fd;
+#endif
   int established;
   int www;
   int disconnected;
@@ -46,7 +77,41 @@ char *_WsDecodeFrame(char *frame, size_t length,
 struct WsServer *WsListen(int port)
 {
   struct WsServer *rtn = NULL;
+#ifdef USE_POSIX
   struct sockaddr_in server = {0};
+#endif
+#ifdef USE_WINSOCK
+  struct addrinfo hints = {0};
+  struct addrinfo *result;
+  char portString[128] = {0};
+  WSADATA wsaData;
+
+  if(!_wsaInitialized)
+  {
+    if(WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+      return NULL;
+    }
+
+    atexit(_WsCleanupWinsock);
+    _wsaInitialized = 1;
+  }
+
+  if(!itoa(port, portString, 10))
+  {
+    return NULL;
+  }
+
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+  hints.ai_flags = AI_PASSIVE;
+
+  if(getaddrinfo(NULL, portString, &hints, &result) != 0)
+  {
+    return NULL;
+  }
+#endif
 
   rtn = calloc(1, sizeof(*rtn));
 
@@ -55,43 +120,83 @@ struct WsServer *WsListen(int port)
     return NULL;
   }
 
+#ifdef USE_POSIX
   rtn->fd = socket(AF_INET, SOCK_STREAM, 0);
 
   if(rtn->fd == -1)
+#endif
+#ifdef USE_WINSOCK
+  rtn->fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+
+  if(rtn->fd == INVALID_SOCKET)
+#endif
   {
+#ifdef USE_WINSOCK
+    freeaddrinfo(result);
+#endif
     free(rtn);
     return NULL;
   }
 
+#ifdef USE_POSIX
   server.sin_family = AF_INET;
   server.sin_addr.s_addr = INADDR_ANY;
   server.sin_port = htons(port);
+#endif
 
-  if(setsockopt(rtn->fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) == -1 ||
+  if(
+#ifdef USE_POSIX
+    setsockopt(rtn->fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) == -1 ||
     fcntl(rtn->fd, F_SETFL, O_NONBLOCK) == -1 ||
     bind(rtn->fd, (struct sockaddr *)&server, sizeof(server)) == -1 ||
-    listen(rtn->fd, WS_CLIENT_QUEUE) == -1)
+    listen(rtn->fd, WS_CLIENT_QUEUE) == -1
+#endif
+#ifdef USE_WINSOCK
+    ioctlsocket(rtn->fd, FIONBIO, &(int){ 1 }) != NO_ERROR ||
+    bind(rtn->fd, result->ai_addr, (int)result->ai_addrlen) == SOCKET_ERROR ||
+    listen(rtn->fd, SOMAXCONN) == SOCKET_ERROR
+#endif
+)
   {
+#ifdef USE_POSIX
     close(rtn->fd);
+#endif
+#ifdef USE_WINSOCK
+    freeaddrinfo(result);
+    closesocket(rtn->fd);
+#endif
     free(rtn);
     return NULL;
   }
+
+#ifdef USE_WINSOCK
+  freeaddrinfo(result);
+#endif
 
   return rtn;
 }
 
 int _WsPollConnectionRequests(struct WsServer *server, struct WsEvent *event)
 {
+#ifdef USE_POSIX
+  struct sockaddr_in client = {0};
+#endif
   fd_set readfds = {0};
   struct timeval tv = {0};
-  struct sockaddr_in client = {0};
   int len = 0;
   struct WsConnection *conn = NULL;
 
   FD_ZERO(&readfds);
   FD_SET(server->fd, &readfds);
 
-  if(select(server->fd + 1, &readfds, NULL, NULL, &tv) == -1)
+  if(
+#ifdef USE_POSIX
+    select(server->fd + 1, &readfds, NULL, NULL, &tv) == -1
+#endif
+#ifdef USE_WINSOCK
+    select(server->fd + 1, &readfds, NULL, NULL, &tv) == SOCKET_ERROR
+#endif
+  )
   {
     return 0;
   }
@@ -108,17 +213,42 @@ int _WsPollConnectionRequests(struct WsServer *server, struct WsEvent *event)
     return 0;
   }
 
-  conn->fd = accept(server->fd, (struct sockaddr *)&client, (socklen_t*)&len);
+  conn->fd =
+#ifdef USE_POSIX
+    accept(server->fd, (struct sockaddr *)&client, (socklen_t*)&len);
+#endif
+#ifdef USE_WINSOCK
+    accept(server->fd, NULL, NULL);
+#endif
 
-  if(conn->fd == -1)
+  if(
+#ifdef USE_POSIX
+    conn->fd == -1
+#endif
+#ifdef USE_WINSOCK
+    conn->fd == INVALID_SOCKET
+#endif
+  )
   {
     free(conn);
     return 0;
   }
 
-  if(fcntl(conn->fd, F_SETFL, O_NONBLOCK) == -1)
+  if(
+#ifdef USE_POSIX
+    fcntl(conn->fd, F_SETFL, O_NONBLOCK) == -1
+#endif
+#ifdef USE_WINSOCK
+    ioctlsocket(conn->fd, FIONBIO, &(int){ 1 }) != NO_ERROR
+#endif
+  )
   {
+#ifdef USE_POSIX
     close(conn->fd);
+#endif
+#ifdef USE_WINSOCK
+    closesocket(conn->fd);
+#endif
     free(conn);
     return 0;
   }
@@ -144,10 +274,18 @@ int _WsPollSend(struct WsConnection *connection)
     return 0;
   }
 
+#ifdef USE_POSIX
   //bw = write(connection->fd, connection->outgoing, connection->outgoingLength);
+  //bw = send(connection->fd, connection->outgoing, MIN(connection->outgoingLength, 2048), MSG_NOSIGNAL);
   bw = send(connection->fd, connection->outgoing, connection->outgoingLength, MSG_NOSIGNAL);
 
   if(bw == -1)
+#endif
+#ifdef USE_WINSOCK
+  bw = send(connection->fd, connection->outgoing, connection->outgoingLength, 0);
+
+  if(bw == SOCKET_ERROR)
+#endif
   {
     return 0;
   }
@@ -183,18 +321,16 @@ int _WsPollSend(struct WsConnection *connection)
  ****************************************************************************/
 int WsSend(struct WsConnection *connection, const char *message, size_t length)
 {
-  if(_WsPollSend(connection) != 0)
-  {
-    return 1;
-  }
+  //if(_WsPollSend(connection) != 0)
+  //{
+  //  return 1;
+  //}
 
   if(!connection->www)
   {
     unsigned char frame[10];  /* Frame.          */
     uint8_t idx_first_rData;  /* Index data.     */
     uint64_t len;             /* Message length. */
-    int idx_response;         /* Index response. */
-    int output;               /* Bytes sent.     */
 
     /* Text data. */
     len = length;
@@ -441,7 +577,14 @@ int _WsPollConnection(struct WsServer *server,
   FD_ZERO(&readfds);
   FD_SET(connection->fd, &readfds);
 
-  if(select(connection->fd + 1, &readfds, NULL, NULL, &tv) == -1)
+  if(
+#ifdef USE_POSIX
+    select(connection->fd + 1, &readfds, NULL, NULL, &tv) == -1
+#endif
+#ifdef USE_WINSOCK
+    select(server->fd + 1, &readfds, NULL, NULL, &tv) == SOCKET_ERROR
+#endif
+  )
   {
     return 0;
   }
@@ -462,8 +605,15 @@ int _WsPollConnection(struct WsServer *server,
       return 1;
     }
 
-    bytes = read(connection->fd,
+    bytes =
+#ifdef USE_POSIX
+    read(connection->fd,
       connection->incoming + connection->incomingLength, bytes);
+#endif
+#ifdef USE_WINSOCK
+    recv(connection->fd,
+      connection->incoming + connection->incomingLength, bytes, 0);
+#endif
 
     if(bytes == 0)
     {
@@ -476,7 +626,12 @@ int _WsPollConnection(struct WsServer *server,
       event->connection = connection;
       return 1;
     }
+#ifdef USE_POSIX
     else if(bytes == -1)
+#endif
+#ifdef USE_WINSOCK
+    else if(bytes == SOCKET_ERROR)
+#endif
     {
       return 0;
     }
@@ -551,7 +706,12 @@ int _WsPollConnections(struct WsServer *server, struct WsEvent *event)
   {
     if(conn->disconnected)
     {
+#ifdef USE_POSIX
       close(conn->fd);
+#endif
+#ifdef USE_WINSOCK
+      closesocket(conn->fd);
+#endif
       WS_LL_REMOVE(server->connections, conn)
       continue;
     }

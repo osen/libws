@@ -139,7 +139,6 @@ char *_WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen,
 {
   char *msg;              /* Decoded message.   */
   uint8_t mask;           /* Payload is masked? */
-  uint8_t flength;        /* Raw length.        */
   uint8_t idx_first_mask; /* Index masking key. */
   uint8_t idx_first_data; /* Index data.        */
   size_t data_length;     /* Data length.       */
@@ -158,20 +157,19 @@ char *_WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen,
     idx_first_mask = 2;
     if(length < 2) return NULL;
     mask = uframe[1];
-    flength = mask & 0x7F;
+    data_length = mask & 0x7F;
 
-    if(flength == 126)
+    if(data_length == 126)
     {
       idx_first_mask = 4;
-      flength = f_uint16(&frame[2]);
+      data_length = f_uint16(&frame[2]);
     }
-    else if(flength == 127)
+    else if(data_length == 127)
     {
       idx_first_mask = 10;
-      flength = f_uint64(&frame[2]);
+      data_length = f_uint64(&frame[2]);
     }
 
-    data_length = flength;
     *decodeLen = data_length;
     idx_first_data = idx_first_mask + 4;
     *end = idx_first_data + data_length;

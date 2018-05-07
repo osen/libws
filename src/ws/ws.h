@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define WS_MESSAGE_SIZE 128 * 1024 * 1024
+#define WS_MESSAGE_SIZE 64 * 1024 * 1024
 #define WS_CLIENT_QUEUE 8
 
 #define WS_HTTP_REQUEST 1
