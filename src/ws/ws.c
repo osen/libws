@@ -107,9 +107,12 @@ void _WsPollConnectionRequests(ref(WsServer) server)
   }
 }
 
-// TODO Do we need to return anything?
-int _WsPollSend(ref(WsConnection) connection)
+void _WsPollSend(ref(WsConnection) connection)
 {
+  /*
+   * If the buffer is empty, early return. If the connection is Http, then assume
+   * the response has been sent and flag for disconnection.
+   */
   if(vector_size(_(connection).outgoing) == 0)
   {
     if(_(connection).www)
@@ -117,12 +120,10 @@ int _WsPollSend(ref(WsConnection) connection)
       _(connection).disconnected = 1;
     }
 
-    return 0;
+    return;
   }
 
   WsTcpSocketSend(_(connection).socket, _(connection).outgoing);
-
-  return 0;
 }
 
 /****************************************************************************
@@ -136,10 +137,8 @@ int _WsPollSend(ref(WsConnection) connection)
  * message    - The data in which to send.
  * length     - The lengh of data (to avoid strlen).
  *
- * Returns 1 if an error has occurred otherwise returns 0.
- *
  ****************************************************************************/
-int WsSend(ref(WsConnection) connection, vector(unsigned char) data)
+void WsSend(ref(WsConnection) connection, vector(unsigned char) data)
 {
   int ci = 0;
   unsigned char frame[10];  /* Frame.          */
@@ -191,12 +190,7 @@ int WsSend(ref(WsConnection) connection, vector(unsigned char) data)
     vector_push_back(_(connection).outgoing, vector_at(data, ci));
   }
 
-  if(_WsPollSend(connection) != 0)
-  {
-    return 1;
-  }
-
-  return 0;
+  _WsPollSend(connection);
 }
 
 /****************************************************************************
@@ -324,19 +318,6 @@ int _WsPollReceive(ref(WsServer) server, ref(WsConnection) connection,
 
     return 1;
   }
-/*
-  else
-  {
-    connection->disconnected = 1;
-    if(!connection->established) return 0;
-    event->disconnect = &server->disconnect;
-    event->disconnect->reason = WS_CLOSED;
-    event->type = WS_DISCONNECT;
-    event->connection = connection;
-
-    return 1;
-  }
-*/
 
   return 0;
 }
@@ -379,7 +360,7 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
      * Add disconnect event data
      */
     disconnect = _(server).disconnect;
-    _(disconnect).reason = WS_NOSEND;
+    _(disconnect).reason = WS_CLOSED;
 
     /*
      * Prepare base event structure
@@ -401,41 +382,6 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
 
   vector_resize(_(connection).buffer, 1024);
   WsTcpSocketRecv(_(connection).socket, _(connection).buffer);
-
-  /*
-   * If no data was received, this means connection broken.
-   */
-  if(vector_size(_(connection).buffer) == 0)
-  {
-    printf("This should never happen\n");
-
-    /*
-     * Flag that connection is ready to be removed.
-     */
-    _(connection).disconnected = 1;
-
-    /*
-     * Ignore if connection never established or http so no initial
-     * connection event was broadcast.
-     */
-    if(!_(connection).established) return 0;
-    if(_(connection).www) return 0;
-
-    /*
-     * Add disconnect event data
-     */
-    disconnect = _(server).disconnect;
-    _(disconnect).reason = WS_CLOSED;
-
-    /*
-     * Prepare base event structure
-     */
-    event->type = WS_DISCONNECT;
-    event->connection = connection;
-    event->disconnect = disconnect;
-
-    return 1;
-  }
 
   /*
    * Copy data from buffer into incoming stream.

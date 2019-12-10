@@ -48,7 +48,7 @@ struct WsEvent
 };
 
 ref(WsServer) WsServerListen(int port);
-int WsSend(ref(WsConnection) connection, vector(unsigned char) data);
+void WsSend(ref(WsConnection) connection, vector(unsigned char) data);
 int WsServerPoll(ref(WsServer) server, int timeout, struct WsEvent *event);
 void WsServerClose(ref(WsServer) server);
 
