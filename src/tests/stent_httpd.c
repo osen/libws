@@ -2,9 +2,9 @@
 
 int main()
 {
-  struct WsServer* server = NULL;
+  ref(WsServer) server = NULL;
   struct WsEvent event = {0};
-  struct WsHttpResponse* response = NULL;
+  ref(WsHttpResponse) response = NULL;
   int count = 0;
 
   server = WsServerListen(8080);

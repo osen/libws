@@ -20,10 +20,10 @@ add_executable(test_socket
 )
 target_link_libraries(test_socket ws)
 
-add_executable(simple_httpd
-  src/tests/simple_httpd.c
+add_executable(stent_httpd
+  src/tests/stent_httpd.c
 )
-target_link_libraries(simple_httpd ws)
+target_link_libraries(stent_httpd ws)
 
 add_executable(wsd
   src/wsd/main.c
