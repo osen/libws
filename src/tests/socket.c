@@ -23,18 +23,11 @@ void handle_client(ref(WsTcpSocket) client)
 
   data = vector_new(unsigned char);
 
-  while(1)
+  while(WsTcpSocketConnected(client))
   {
     if(WsTcpSocketReady(client))
     {
       printf("Client ready\n");
-
-      if(!WsTcpSocketConnected(client))
-      {
-        printf("Client disconnected\n");
-        break;
-      }
-
       printf("Data received\n");
       vector_resize(data, 128);
       WsTcpSocketRecv(client, data);
@@ -45,6 +38,7 @@ void handle_client(ref(WsTcpSocket) client)
     wait();
   }
 
+  printf("Client disconnected\n");
   WsTcpSocketClose(client);
   vector_delete(data);
 }

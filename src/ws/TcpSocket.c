@@ -171,12 +171,19 @@ void WsTcpSocketClose(ref(WsTcpSocket) ctx)
 
 int WsTcpSocketConnected(ref(WsTcpSocket) ctx)
 {
-  if(_(ctx).state)
+  if(_(ctx).state == 0)
   {
-    return 1;
+    return 0;
   }
 
-  return 0;
+  WsTcpSocketReady(ctx);
+
+  if(_(ctx).state == 0)
+  {
+    return 0;
+  }
+
+  return 1;
 }
 
 int WsTcpSocketsReady(vector(ref(WsTcpSocket)) reads,
@@ -260,6 +267,11 @@ int WsTcpSocketReady(ref(WsTcpSocket) ctx)
   int bytes = 0;
   char buf = 0;
 
+  if(_(ctx).state == 0)
+  {
+    return 0;
+  }
+
   FD_ZERO(&readfds);
   FD_SET(_(ctx).fd, &readfds);
 
@@ -292,10 +304,22 @@ int WsTcpSocketReady(ref(WsTcpSocket) ctx)
     if(bytes < 1)
     {
       _(ctx).state = 0;
+
+      return 0;
     }
+
+    return 1;
+  }
+  else if(_(ctx).state == 1)
+  {
+    return 1;
+  }
+  else
+  {
+    _WsPanic("Socket in unknown state had event waiting");
   }
 
-  return 1;
+  return 0;
 }
 
 void WsTcpSocketSend(ref(WsTcpSocket) ctx,

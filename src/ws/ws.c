@@ -398,14 +398,6 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
    _WsPollSend(connection);
 
   /*
-   * Return if no data is waiting.
-   */
-  if(WsTcpSocketReady(_(connection).socket) == 0)
-  {
-    return 0;
-  }
-
-  /*
    * Send disconnect event and return if socket no longer connected.
    */
   if(WsTcpSocketConnected(_(connection).socket) == 0)
@@ -428,6 +420,14 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
     event->disconnect = disconnect;
 
     return 1;
+  }
+
+  /*
+   * Return if no data is waiting.
+   */
+  if(WsTcpSocketReady(_(connection).socket) == 0)
+  {
+    return 0;
   }
 
   vector_resize(_(connection).buffer, 1024);
