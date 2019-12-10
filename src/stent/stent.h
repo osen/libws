@@ -296,6 +296,7 @@ vector(void) _vector_new(size_t size);
 void _vector_delete(vector(void) ptr);
 size_t _vector_size(vector(void) ptr);
 void _vector_resize(vector(void) ptr, size_t size);
+void _vector_clear(vector(void) ptr);
 size_t _vector_valid(vector(void) ptr, size_t idx);
 void _vector_erase(vector(void) ptr, size_t idx, size_t num);
 

@@ -10,6 +10,11 @@
 #define WS_FIN 128
 #define WS_FR_OP_TXT  1
 
+#define WS_STATE_INITIAL 0
+#define WS_STATE_HTTP 1
+#define WS_STATE_WEBSOCKET 2
+#define WS_STATE_DISCONNECTED 3
+
 struct WsServer
 {
   ref(WsTcpSocket) socket;
@@ -24,10 +29,7 @@ struct WsServer
 struct WsConnection
 {
   ref(WsTcpSocket) socket;
-  int established;
-  int www;
-  int websocket;
-  int disconnected;
+  int state;
   vector(unsigned char) buffer;
   vector(unsigned char) incoming;
   vector(unsigned char) outgoing;
@@ -110,16 +112,10 @@ void _WsPollConnectionRequests(ref(WsServer) server)
 void _WsPollSend(ref(WsConnection) connection)
 {
   /*
-   * If the buffer is empty, early return. If the connection is Http, then assume
-   * the response has been sent and flag for disconnection.
+   * If the buffer is empty, early return.
    */
-  if(vector_size(_(connection).outgoing) == 0)
+  if(vector_size(_(connection).outgoing) < 1)
   {
-    if(_(connection).www)
-    {
-      _(connection).disconnected = 1;
-    }
-
     return;
   }
 
@@ -145,7 +141,7 @@ void WsSend(ref(WsConnection) connection, vector(unsigned char) data)
   uint8_t idx_first_rData;  /* Index data.     */
   uint64_t len;             /* Message length. */
 
-  if(!_(connection).websocket)
+  if(_(connection).state != WS_STATE_WEBSOCKET)
   {
     _WsPanic("Invalid socket state");
   }
@@ -232,14 +228,12 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
   }
 
   response = _WsHandshakeResponse(_(connection).incoming);
-
-  _(connection).established = 1;
   event->connection = connection;
 
   if(response)
   {
     WsSend(connection, response);
-    _(connection).websocket = 1;
+    _(connection).state = WS_STATE_WEBSOCKET;
     vector_delete(response);
     vector_erase(_(connection).incoming, 0, nextStart);
     event->type = WS_CONNECT;
@@ -260,9 +254,7 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
     sstream_append_cstr(_(_(event->http).request).path,
       sstream_cstr(HttpHeaderPath(header)));
 
-    _(connection).www = 1;
-
-    /* TODO: Send default request? */
+    _(connection).state = WS_STATE_HTTP;
   }
 
   HttpHeaderDestroy(header);
@@ -341,20 +333,25 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
   ref(WsDisconnectEvent) disconnect = NULL;
-
-  /*
-   * Flush remaining outgoing data
-   */
-   _WsPollSend(connection);
+  int state = 0;
 
   /*
    * Send disconnect event and return if socket no longer connected.
    */
   if(WsTcpSocketConnected(_(connection).socket) == 0)
   {
-    _(connection).disconnected = 1;
-    if(!_(connection).established) return 0;
-    if(_(connection).www) return 0;
+    state = _(connection).state;
+    _(connection).state = WS_STATE_DISCONNECTED;
+
+    /*
+     * If the state was initial or http, then don't generate a disconnect event.
+     * The user was never aware of them connecting in the first place.
+     */
+    if(state == WS_STATE_INITIAL ||
+      state == WS_STATE_HTTP)
+    {
+      return 0;
+    }
 
     /*
      * Add disconnect event data
@@ -370,6 +367,25 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
     event->disconnect = disconnect;
 
     return 1;
+  }
+
+  /*
+   * Flush any outgoing data
+   */
+   _WsPollSend(connection);
+
+  /*
+   * If connection is Http and buffer is empty, assume that the
+   * response has been sent and flag for disconnection.
+   */
+  if(_(connection).state == WS_STATE_HTTP)
+  {
+    if(vector_size(_(connection).outgoing) < 1)
+    {
+      _(connection).state = WS_STATE_DISCONNECTED;
+
+      return 0;
+    }
   }
 
   /*
@@ -391,18 +407,16 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
     _(connection).buffer, 0,
     vector_size(_(connection).buffer));
 
-  if(!_(connection).established)
+  if(_(connection).state == WS_STATE_INITIAL)
   {
     return _WsPollHandshake(server, connection, event);
   }
-
-  if(_(connection).www)
+  else if(_(connection).state == WS_STATE_WEBSOCKET)
   {
-    printf("Warning: HTTP client is sending more data?\n");
-    return 0;
+    return _WsPollReceive(server, connection, event);
   }
 
-  return _WsPollReceive(server, connection, event);
+  return 0;
 }
 
 /****************************************************************************
@@ -448,7 +462,7 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 
     conn = vector_at(_(server).connections, curr);
 
-    if(_(conn).disconnected == 1)
+    if(_(conn).state == WS_STATE_DISCONNECTED)
     {
       _WsConnectionDestroy(conn);
       vector_erase(_(server).connections, curr, 1);
@@ -520,11 +534,7 @@ int _WsWaitForEvent(ref(WsServer) server, int timeout)
  ****************************************************************************/
 int WsServerPoll(ref(WsServer) server, int timeout, struct WsEvent *event)
 {
-  // TODO: Only clear when needed
-  //sreset(_(server).disconnect);
-  //sreset(_(server).message);
-  //sreset(_(server).http);
-
+  struct WsEvent ee = {0};
   /*
    * If timeout specified or infinite (-1) then batch select to wait for
    * an event to occur in that amount of time. If 0 timeout then just
@@ -542,6 +552,7 @@ int WsServerPoll(ref(WsServer) server, int timeout, struct WsEvent *event)
   }
 
   _WsPollConnectionRequests(server);
+  *event = ee;
 
   if(_WsPollConnections(server, event))
   {
