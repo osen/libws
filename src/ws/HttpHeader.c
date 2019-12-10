@@ -106,7 +106,9 @@ ref(HttpHeader) HttpHeaderCreate(vector(unsigned char) data)
   for(hi = 0; hi < vector_size(hls); hi++)
   {
     ss = vector_at(hls, hi);
+/*
     printf("Line: %s\n", sstream_cstr(ss));
+*/
   }
 
   /*

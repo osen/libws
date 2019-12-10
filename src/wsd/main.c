@@ -88,7 +88,9 @@ int main()
       }
     }
 
+/*
     printf("Tick\n");
+*/
   }
 
   WsServerClose(server);

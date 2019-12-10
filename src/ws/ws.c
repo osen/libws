@@ -139,91 +139,56 @@ int _WsPollSend(ref(WsConnection) connection)
  * Returns 1 if an error has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int WsSend(ref(WsConnection) connection, const char *message, size_t length)
+int WsSend(ref(WsConnection) connection, vector(unsigned char) data)
 {
   int ci = 0;
+  unsigned char frame[10];  /* Frame.          */
+  uint8_t idx_first_rData;  /* Index data.     */
+  uint64_t len;             /* Message length. */
 
-  if(_(connection).websocket)
+  if(!_(connection).websocket)
   {
-    unsigned char frame[10];  /* Frame.          */
-    uint8_t idx_first_rData;  /* Index data.     */
-    uint64_t len;             /* Message length. */
-
-    /* Text data. */
-    len = length;
-    frame[0] = (WS_FIN | WS_FR_OP_TXT);
-
-    if (len <= 125)
-    {
-      frame[1] = len & 0x7F;
-      idx_first_rData = 2;
-    }
-    else if (len >= 126 && len <= 65535)
-    {
-      frame[1] = 126;
-      frame[2] = (len >> 8) & 255;
-      frame[3] = len & 255;
-      idx_first_rData = 4;
-    }
-    else
-    {
-      frame[1] = 127;
-      frame[2] = (unsigned char) ((len >> 56) & 255);
-      frame[3] = (unsigned char) ((len >> 48) & 255);
-      frame[4] = (unsigned char) ((len >> 40) & 255);
-      frame[5] = (unsigned char) ((len >> 32) & 255);
-      frame[6] = (unsigned char) ((len >> 24) & 255);
-      frame[7] = (unsigned char) ((len >> 16) & 255);
-      frame[8] = (unsigned char) ((len >> 8) & 255);
-      frame[9] = (unsigned char) (len & 255);
-      idx_first_rData = 10;
-    }
-
-    for(ci = 0; ci < idx_first_rData; ci++)
-    {
-      vector_push_back(_(connection).outgoing, frame[ci]);
-    }
-
-    for(ci = 0; ci < length; ci++)
-    {
-      vector_push_back(_(connection).outgoing, message[ci]);
-    }
-
-    /*printf("Message: %s\n", connection->outgoing);*/
-    /*printf("Message: %s\n", message);*/
+    _WsPanic("Invalid socket state");
   }
-  else if(_(connection).www)
+
+  /* Text data. */
+  len = vector_size(data);
+  frame[0] = (WS_FIN | WS_FR_OP_TXT);
+
+  if(len <= 125)
   {
-    char header[512] = {0};
-    int headerLen = 0;
-
-    sprintf(header,
-      "HTTP/1.1 200 OK\r\n"
-      "Content-Type: text/html\r\n"
-      "Content-Length: %i\r\n"
-      "Connection: close\r\n"
-      "\r\n", (int)length);
-
-    headerLen = strlen(header);
-
-    for(ci = 0; ci < headerLen; ci++)
-    {
-      vector_push_back(_(connection).outgoing, header[ci]);
-    }
-
-    for(ci = 0; ci < length; ci++)
-    {
-      vector_push_back(_(connection).outgoing, message[ci]);
-    }
+    frame[1] = len & 0x7F;
+    idx_first_rData = 2;
+  }
+  else if (len >= 126 && len <= 65535)
+  {
+    frame[1] = 126;
+    frame[2] = (len >> 8) & 255;
+    frame[3] = len & 255;
+    idx_first_rData = 4;
   }
   else
   {
-    printf("TODO: Do we reach here?\n");
+    frame[1] = 127;
+    frame[2] = (unsigned char) ((len >> 56) & 255);
+    frame[3] = (unsigned char) ((len >> 48) & 255);
+    frame[4] = (unsigned char) ((len >> 40) & 255);
+    frame[5] = (unsigned char) ((len >> 32) & 255);
+    frame[6] = (unsigned char) ((len >> 24) & 255);
+    frame[7] = (unsigned char) ((len >> 16) & 255);
+    frame[8] = (unsigned char) ((len >> 8) & 255);
+    frame[9] = (unsigned char) (len & 255);
+    idx_first_rData = 10;
+  }
 
-    for(ci = 0; ci < length; ci++)
-    {
-      vector_push_back(_(connection).outgoing, message[ci]);
-    }
+  for(ci = 0; ci < idx_first_rData; ci++)
+  {
+    vector_push_back(_(connection).outgoing, frame[ci]);
+  }
+
+  for(ci = 0; ci < len; ci++)
+  {
+    vector_push_back(_(connection).outgoing, vector_at(data, ci));
   }
 
   if(_WsPollSend(connection) != 0)
@@ -279,7 +244,7 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
 
   if(response)
   {
-    WsSend(connection, &vector_at(response, 0), vector_size(response));
+    WsSend(connection, response);
     _(connection).websocket = 1;
     vector_delete(response);
     vector_erase(_(connection).incoming, 0, nextStart);
@@ -304,7 +269,6 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
     _(connection).www = 1;
 
     /* TODO: Send default request? */
-    //WsSend(connection, "Test data", 9);
   }
 
   HttpHeaderDestroy(header);
@@ -693,13 +657,39 @@ void WsHttpResponseWrite(ref(WsHttpResponse) ctx, char *data)
 
 void WsHttpResponseSend(ref(WsHttpResponse) ctx)
 {
+  char header[512] = {0};
+  int headerLen = 0;
+  ref(WsConnection) connection = NULL;
+  size_t ci = 0;
+
   if(_(ctx).headersSent != 0)
   {
     _WsPanic("Headers already sent");
   }
 
-  WsSend(_(ctx).connection, data, strlen(data));
   _(ctx).headersSent = 1;
+
+  sprintf(header,
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Content-Length: %i\r\n"
+    "Connection: close\r\n"
+    "\r\n", (int)vector_size(_(ctx).data));
+
+  headerLen = strlen(header);
+  connection = _(ctx).connection;
+
+  for(ci = 0; ci < headerLen; ci++)
+  {
+    vector_push_back(_(connection).outgoing, header[ci]);
+  }
+
+  for(ci = 0; ci < vector_size(_(ctx).data); ci++)
+  {
+    vector_push_back(_(connection).outgoing, vector_at(_(ctx).data, ci));
+  }
+
+  _WsPollSend(connection);
 }
 
 ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) ctx)
