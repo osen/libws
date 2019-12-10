@@ -43,6 +43,8 @@ struct WsHttpResponse
 { 
   ref(WsConnection) connection;
   int headersSent;
+  int status;
+  vector(unsigned char) data;
 };
 
 vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request);
@@ -67,6 +69,7 @@ ref(WsServer) WsServerListen(int port)
   _(_(rtn).http).request = allocate(WsHttpRequest);
   _(_(_(rtn).http).request).path = sstream_new();
   _(_(rtn).http).response = allocate(WsHttpResponse);
+  _(_(_(rtn).http).response).data = vector_new(unsigned char);
 
   _(rtn).connections = vector_new(ref(WsConnection));
   _(rtn).socket = WsTcpListen(port);
@@ -289,6 +292,8 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
 
     _(_(event->http).response).connection = connection;
     _(_(event->http).response).headersSent = 0;
+    _(_(event->http).response).status = 200;
+    vector_clear(_(_(event->http).response).data);
 
     _(_(event->http).request).connection = connection;
     sstream_str_cstr(_(_(event->http).request).path, "");
@@ -642,8 +647,9 @@ void WsServerClose(ref(WsServer) server)
 
   release(_(server).disconnect);
   release(_(server).message);
-  sstream_delete(_(_(_(server).http).request).path);
+  vector_delete(_(_(_(server).http).response).data);
   release(_(_(server).http).response);
+  sstream_delete(_(_(_(server).http).request).path);
   release(_(_(server).http).request);
   release(_(server).http);
 
@@ -667,18 +673,36 @@ ref(WsHttpResponse) WsHttpEventResponse(ref(WsHttpEvent) ctx)
   return _(ctx).response;
 }
 
-void WsHttpResponseWrite(ref(WsHttpResponse) response, char *data)
+void WsHttpResponseWrite(ref(WsHttpResponse) ctx, char *data)
 {
-  if(_(response).headersSent != 0)
+  size_t di = 0;
+  size_t len = 0;
+
+  if(_(ctx).headersSent != 0)
   {
     _WsPanic("Headers already sent");
   }
 
-  WsSend(_(response).connection, data, strlen(data));
-  _(response).headersSent = 1;
+  len = strlen(data);
+
+  for(di = 0; di < len; di++)
+  {
+    vector_push_back(_(ctx).data, data[di]);
+  }
 }
 
-ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) request)
+void WsHttpResponseSend(ref(WsHttpResponse) ctx)
 {
-  return _(request).path;
+  if(_(ctx).headersSent != 0)
+  {
+    _WsPanic("Headers already sent");
+  }
+
+  WsSend(_(ctx).connection, data, strlen(data));
+  _(ctx).headersSent = 1;
+}
+
+ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) ctx)
+{
+  return _(ctx).path;
 }

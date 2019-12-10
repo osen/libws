@@ -55,7 +55,8 @@ void WsServerClose(ref(WsServer) server);
 ref(WsHttpRequest) WsHttpEventRequest(ref(WsHttpEvent) ctx);
 ref(WsHttpResponse) WsHttpEventResponse(ref(WsHttpEvent) ctx);
 
-void WsHttpResponseWrite(ref(WsHttpResponse) response, char *data);
-ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) request);
+void WsHttpResponseWrite(ref(WsHttpResponse) ctx, char *data);
+void WsHttpResponseSend(ref(WsHttpResponse) ctx);
+ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) ctx);
 
 #endif

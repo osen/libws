@@ -32,6 +32,8 @@ void handle_http(ref(WsHttpEvent) http)
   {
     WsHttpResponseWrite(response, "404");
   }
+
+  WsHttpResponseSend(response);
 }
 
 ref(sstream) load_file(char *path)
