@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 2.6)
-project(WS)
+project(WS C)
 
 include_directories(
   ${PROJECT_SOURCE_DIR}/src
-  ${PROJECT_SOURCE_DIR}/src/stent
 )
 
 add_library(ws
@@ -20,6 +19,11 @@ add_executable(test_socket
   src/tests/socket.c
 )
 target_link_libraries(test_socket ws)
+
+add_executable(simple_httpd
+  src/tests/simple_httpd.c
+)
+target_link_libraries(simple_httpd ws)
 
 add_executable(wsd
   src/wsd/main.c

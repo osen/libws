@@ -1,7 +1,7 @@
 #include "TcpSocket.h"
 
 #define STENT_IMPLEMENTATION
-#include <stent.h>
+#include "stent.h"
 
 #ifdef _WIN32
   #define USE_WINSOCK

@@ -1,7 +1,7 @@
 #include "sha1.h"
 #include "base64.h"
 
-#include <stent/stent.h>
+#include "stent.h"
 
 #include <stdio.h>
 #include <string.h>

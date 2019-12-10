@@ -1,7 +1,7 @@
 #ifndef WS_WS_H
 #define WS_WS_H
 
-#include <stent/stent.h>
+#include "stent.h"
 
 #include <stddef.h>
 

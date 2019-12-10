@@ -1,7 +1,7 @@
 #ifndef WS_TCPSOCKET_H
 #define WS_TCPSOCKET_H
 
-#include <stent/stent.h>
+#include "stent.h"
 
 struct WsTcpSocket;
 
