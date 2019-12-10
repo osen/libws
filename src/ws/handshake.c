@@ -1,6 +1,8 @@
 #include "sha1.h"
 #include "base64.h"
 
+#include <stent/stent.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -38,19 +40,25 @@ unsigned char *_WsHandshakeAccept(char *wsKey)
   SHA1Result(&ctx, hash);
 
   rtn = base64_encode(hash, SHA1HashSize, NULL);
+
+  /* TODO: The simple version does not add a '\n' on the end. */
   *(rtn + strlen((const char *)rtn) - 1) = '\0';
+
   free(str);
 
   return rtn;
 }
 
-char *_WsHandshakeResponse(char *request)
+vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request)
 {
-  char *s;
-  unsigned char *accept;
-  char *rtn = NULL;
+  char *s = NULL;
+  unsigned char *accept = NULL;
+  vector(unsigned char) rtn = NULL;
+  char *req = NULL;
 
-  for(s = strtok(request, "\r\n"); s != NULL; s = strtok(NULL, "\r\n"))
+  req = &vector_at(request, 0);
+
+  for(s = strtok(req, "\r\n"); s != NULL; s = strtok(NULL, "\r\n"))
   {
     if(strstr(s, WS_HS_REQ) != NULL)
     {
@@ -68,10 +76,12 @@ char *_WsHandshakeResponse(char *request)
 	
   accept = _WsHandshakeAccept(s);
 
-  rtn = malloc(sizeof(char) * WS_HS_ACCLEN);
-  strcpy(rtn, WS_HS_ACCEPT);
-  strcat(rtn, (const char *)accept);
-  strcat(rtn, "\r\n\r\n");
+  rtn = vector_new(unsigned char);
+  vector_resize(rtn, WS_HS_ACCLEN);
+  //rtn = malloc(sizeof(char) * WS_HS_ACCLEN);
+  strcpy(&vector_at(rtn, 0), WS_HS_ACCEPT);
+  strcat(&vector_at(rtn, 0), (const char *)accept);
+  strcat(&vector_at(rtn, 0), "\r\n\r\n");
 
   free(accept);
 
@@ -134,9 +144,11 @@ uint16_t f_uint16(uint8_t *value)
  * Returns the decoded frames message.
  *
  ****************************************************************************/
-char *_WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen,
-  size_t *end)
+char *_WsDecodeFrame(vector(unsigned char) _frame,
+  int *type, size_t *decodeLen, size_t *end)
 {
+  char *frame = NULL;
+  size_t length = 0;
   char *msg;              /* Decoded message.   */
   uint8_t mask;           /* Payload is masked? */
   uint8_t idx_first_mask; /* Index masking key. */
@@ -144,9 +156,12 @@ char *_WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen,
   size_t data_length;     /* Data length.       */
   uint8_t masks[4];       /* Masking key.       */
   size_t i,j;             /* Loop indexes.      */
-  unsigned char *uframe;  /* Casted bytes       */
+  uint8_t *uframe;        /* Casted bytes       */
 
-  uframe = (unsigned char *)frame;
+  frame = &vector_at(_frame, 0);
+  length = vector_size(_frame);
+
+  uframe = (uint8_t *)frame;
   msg = NULL;
 
   if(length < 1) return NULL;
@@ -162,12 +177,12 @@ char *_WsDecodeFrame(char *frame, size_t length, int *type, size_t *decodeLen,
     if(data_length == 126)
     {
       idx_first_mask = 4;
-      data_length = f_uint16(&frame[2]);
+      data_length = f_uint16(&uframe[2]);
     }
     else if(data_length == 127)
     {
       idx_first_mask = 10;
-      data_length = f_uint64(&frame[2]);
+      data_length = f_uint64(&uframe[2]);
     }
 
     *decodeLen = data_length;

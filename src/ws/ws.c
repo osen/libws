@@ -1,26 +1,6 @@
 #include "ws.h"
-
-#ifdef _WIN32
-  #define USE_WINSOCK
-#else
-  #define USE_POSIX
-#endif
-
-#ifdef USE_POSIX
-  #include <sys/socket.h>
-  #include <arpa/inet.h>
-  #include <netinet/in.h>
-  #include <fcntl.h>
-  #include <unistd.h>
-  #include <sys/select.h>
-#endif
-
-#ifdef USE_WINSOCK
-  //#define WIN32_LEAN_AND_MEAN
-  //#include <windows.h>
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-#endif
+#include "TcpSocket.h"
+#include "HttpHeader.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -30,277 +10,114 @@
 #define WS_FIN 128
 #define WS_FR_OP_TXT  1
 
-//#define MIN(a, b) (((a)<(b))?(a):(b))
-
 struct WsServer
 {
-  int fd;
-  struct WsMessageEvent message;
-  struct WsDisconnectEvent disconnect;
-  struct WsConnection *connections;
-};
+  ref(WsTcpSocket) socket;
+  vector(ref(WsConnection)) connections;
+  size_t nextToPoll;
 
-#ifdef USE_WINSOCK
-int _wsaInitialized;
-void _WsCleanupWinsock(void)
-{
-  WSACleanup();
-}
-#endif
+  ref(WsHttpEvent) http;
+  ref(WsMessageEvent) message;
+  ref(WsDisconnectEvent) disconnect;
+};
 
 struct WsConnection
 {
-#ifdef USE_WINSOCK
-  SOCKET fd;
-#endif
-#ifdef USE_POSIX
-  int fd;
-#endif
+  ref(WsTcpSocket) socket;
   int established;
   int www;
+  int websocket;
   int disconnected;
-  char incoming[WS_MESSAGE_SIZE];
-  size_t incomingLength;
-
-  char outgoing[WS_MESSAGE_SIZE];
-  size_t outgoingLength;
-  struct WsConnection *next;
-  struct WsConnection *prev;
+  vector(unsigned char) buffer;
+  vector(unsigned char) incoming;
+  vector(unsigned char) outgoing;
 };
 
-char *_WsHandshakeResponse(char *request);
+struct WsHttpRequest
+{
+  ref(WsConnection) connection;
+  ref(sstream) path;
+};
+
+struct WsHttpResponse
+{ 
+  ref(WsConnection) connection;
+  int headersSent;
+};
+
+vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request);
 unsigned char *_WsHandshakeAccept(char *wsKey);
 
-char *_WsDecodeFrame(char *frame, size_t length,
+char *_WsDecodeFrame(vector(unsigned char) frame,
   int *type, size_t *decodeLen, size_t *end);
 
-struct WsServer *WsListen(int port)
+ref(WsServer) WsServerListen(int port)
 {
-  struct WsServer *rtn = NULL;
-#ifdef USE_POSIX
-  struct sockaddr_in server = {0};
-#endif
-#ifdef USE_WINSOCK
-  struct addrinfo hints = {0};
-  struct addrinfo *result;
-  char portString[128] = {0};
-  WSADATA wsaData;
+  ref(WsServer) rtn = NULL;
 
-  if(!_wsaInitialized)
-  {
-    if(WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-    {
-      return NULL;
-    }
+  rtn = allocate(WsServer);
 
-    atexit(_WsCleanupWinsock);
-    _wsaInitialized = 1;
-  }
+  /*
+   * Allocate the event structures
+   */
+  _(rtn).disconnect = allocate(WsDisconnectEvent);
+  _(rtn).message = allocate(WsMessageEvent);
 
-  if(!itoa(port, portString, 10))
-  {
-    return NULL;
-  }
+  _(rtn).http = allocate(WsHttpEvent);
+  _(_(rtn).http).request = allocate(WsHttpRequest);
+  _(_(_(rtn).http).request).path = sstream_new();
+  _(_(rtn).http).response = allocate(WsHttpResponse);
 
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_protocol = IPPROTO_TCP;
-  hints.ai_flags = AI_PASSIVE;
-
-  if(getaddrinfo(NULL, portString, &hints, &result) != 0)
-  {
-    return NULL;
-  }
-#endif
-
-  rtn = calloc(1, sizeof(*rtn));
-
-  if(!rtn)
-  {
-    return NULL;
-  }
-
-#ifdef USE_POSIX
-  rtn->fd = socket(AF_INET, SOCK_STREAM, 0);
-
-  if(rtn->fd == -1)
-#endif
-#ifdef USE_WINSOCK
-  rtn->fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-
-  if(rtn->fd == INVALID_SOCKET)
-#endif
-  {
-#ifdef USE_WINSOCK
-    freeaddrinfo(result);
-#endif
-    free(rtn);
-    return NULL;
-  }
-
-#ifdef USE_POSIX
-  server.sin_family = AF_INET;
-  server.sin_addr.s_addr = INADDR_ANY;
-  server.sin_port = htons(port);
-#endif
-
-  if(
-#ifdef USE_POSIX
-    setsockopt(rtn->fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) == -1 ||
-    fcntl(rtn->fd, F_SETFL, O_NONBLOCK) == -1 ||
-    bind(rtn->fd, (struct sockaddr *)&server, sizeof(server)) == -1 ||
-    listen(rtn->fd, WS_CLIENT_QUEUE) == -1
-#endif
-#ifdef USE_WINSOCK
-    ioctlsocket(rtn->fd, FIONBIO, &(int){ 1 }) != NO_ERROR ||
-    bind(rtn->fd, result->ai_addr, (int)result->ai_addrlen) == SOCKET_ERROR ||
-    listen(rtn->fd, SOMAXCONN) == SOCKET_ERROR
-#endif
-)
-  {
-#ifdef USE_POSIX
-    close(rtn->fd);
-#endif
-#ifdef USE_WINSOCK
-    freeaddrinfo(result);
-    closesocket(rtn->fd);
-#endif
-    free(rtn);
-    return NULL;
-  }
-
-#ifdef USE_WINSOCK
-  freeaddrinfo(result);
-#endif
+  _(rtn).connections = vector_new(ref(WsConnection));
+  _(rtn).socket = WsTcpListen(port);
 
   return rtn;
 }
 
-int _WsPollConnectionRequests(struct WsServer *server, struct WsEvent *event)
+void _WsConnectionDestroy(ref(WsConnection) ctx)
 {
-#ifdef USE_POSIX
-  struct sockaddr_in client = {0};
-#endif
-  fd_set readfds = {0};
-  struct timeval tv = {0};
-  int len = 0;
-  struct WsConnection *conn = NULL;
-
-  FD_ZERO(&readfds);
-  FD_SET(server->fd, &readfds);
-
-  if(
-#ifdef USE_POSIX
-    select(server->fd + 1, &readfds, NULL, NULL, &tv) == -1
-#endif
-#ifdef USE_WINSOCK
-    select(server->fd + 1, &readfds, NULL, NULL, &tv) == SOCKET_ERROR
-#endif
-  )
-  {
-    return 0;
-  }
-
-  if(!FD_ISSET(server->fd, &readfds))
-  {
-    return 0;
-  }
-
-  conn = calloc(1, sizeof(*event->connection));
-
-  if(!conn)
-  {
-    return 0;
-  }
-
-  conn->fd =
-#ifdef USE_POSIX
-    accept(server->fd, (struct sockaddr *)&client, (socklen_t*)&len);
-#endif
-#ifdef USE_WINSOCK
-    accept(server->fd, NULL, NULL);
-#endif
-
-  if(
-#ifdef USE_POSIX
-    conn->fd == -1
-#endif
-#ifdef USE_WINSOCK
-    conn->fd == INVALID_SOCKET
-#endif
-  )
-  {
-    free(conn);
-    return 0;
-  }
-
-  if(
-#ifdef USE_POSIX
-    fcntl(conn->fd, F_SETFL, O_NONBLOCK) == -1
-#endif
-#ifdef USE_WINSOCK
-    ioctlsocket(conn->fd, FIONBIO, &(int){ 1 }) != NO_ERROR
-#endif
-  )
-  {
-#ifdef USE_POSIX
-    close(conn->fd);
-#endif
-#ifdef USE_WINSOCK
-    closesocket(conn->fd);
-#endif
-    free(conn);
-    return 0;
-  }
-
-  if(server->connections) server->connections->prev = conn;
-  conn->next = server->connections;
-  server->connections = conn;
-
-  return 0;
+  WsTcpSocketClose(_(ctx).socket);
+  vector_delete(_(ctx).buffer);
+  vector_delete(_(ctx).incoming);
+  vector_delete(_(ctx).outgoing);
+  release(ctx);
 }
 
-int _WsPollSend(struct WsConnection *connection)
+void _WsPollConnectionRequests(ref(WsServer) server)
 {
-  int bw = 0;
+  ref(WsConnection) conn = NULL;
 
-  if(connection->outgoingLength == 0)
+  /*
+   * Keep processing whilst clients waiting
+   */
+  while(WsTcpSocketReady(_(server).socket) == 1)
   {
-    if(connection->www)
+    /*
+     * Wrap the socket as a connection and add to list
+     */
+    conn = allocate(WsConnection);
+    _(conn).socket = WsTcpSocketAccept(_(server).socket);
+    _(conn).buffer = vector_new(unsigned char);
+    _(conn).incoming = vector_new(unsigned char);
+    _(conn).outgoing = vector_new(unsigned char);
+    vector_push_back(_(server).connections, conn);
+  }
+}
+
+// TODO Do we need to return anything?
+int _WsPollSend(ref(WsConnection) connection)
+{
+  if(vector_size(_(connection).outgoing) == 0)
+  {
+    if(_(connection).www)
     {
-      connection->disconnected = 1;
+      _(connection).disconnected = 1;
     }
 
     return 0;
   }
 
-#ifdef USE_POSIX
-  //bw = write(connection->fd, connection->outgoing, connection->outgoingLength);
-  //bw = send(connection->fd, connection->outgoing, MIN(connection->outgoingLength, 2048), MSG_NOSIGNAL);
-  bw = send(connection->fd, connection->outgoing, connection->outgoingLength, MSG_NOSIGNAL);
-
-  if(bw == -1)
-#endif
-#ifdef USE_WINSOCK
-  bw = send(connection->fd, connection->outgoing, connection->outgoingLength, 0);
-
-  if(bw == SOCKET_ERROR)
-#endif
-  {
-    return 0;
-  }
-  else if(bw == 0)
-  {
-    return 0;
-  }
-
-  connection->outgoingLength -= bw;
-  memmove(connection->outgoing, connection->outgoing + bw, connection->outgoingLength);
-
-  // Clear the rest of the buffer
-  //memset(connection->outgoing + connection->outgoingLength, 0, WS_MESSAGE_SIZE - connection->outgoingLength);
-
-  connection->outgoing[connection->outgoingLength] = '\0';
+  WsTcpSocketSend(_(connection).socket, _(connection).outgoing);
 
   return 0;
 }
@@ -319,14 +136,11 @@ int _WsPollSend(struct WsConnection *connection)
  * Returns 1 if an error has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int WsSend(struct WsConnection *connection, const char *message, size_t length)
+int WsSend(ref(WsConnection) connection, const char *message, size_t length)
 {
-  //if(_WsPollSend(connection) != 0)
-  //{
-  //  return 1;
-  //}
+  int ci = 0;
 
-  if(!connection->www)
+  if(_(connection).websocket)
   {
     unsigned char frame[10];  /* Frame.          */
     uint8_t idx_first_rData;  /* Index data.     */
@@ -362,34 +176,51 @@ int WsSend(struct WsConnection *connection, const char *message, size_t length)
       idx_first_rData = 10;
     }
 
-    if(connection->outgoingLength + idx_first_rData + length > WS_MESSAGE_SIZE - 1)
+    for(ci = 0; ci < idx_first_rData; ci++)
     {
-      printf("Too large\n");
-      return 1;
+      vector_push_back(_(connection).outgoing, frame[ci]);
     }
 
-    memcpy(connection->outgoing + connection->outgoingLength, frame, idx_first_rData);
-    memcpy(connection->outgoing + connection->outgoingLength + idx_first_rData, message, length);
-    connection->outgoingLength += idx_first_rData + length;
+    for(ci = 0; ci < length; ci++)
+    {
+      vector_push_back(_(connection).outgoing, message[ci]);
+    }
+
+    /*printf("Message: %s\n", connection->outgoing);*/
+    /*printf("Message: %s\n", message);*/
   }
-  else
+  else if(_(connection).www)
   {
-    sprintf(connection->outgoing,
+    char header[512] = {0};
+    int headerLen = 0;
+
+    sprintf(header,
       "HTTP/1.1 200 OK\r\n"
       "Content-Type: text/html\r\n"
       "Content-Length: %i\r\n"
       "Connection: close\r\n"
       "\r\n", (int)length);
 
-    connection->outgoingLength = strlen(connection->outgoing);
+    headerLen = strlen(header);
 
-    if(connection->outgoingLength + length > WS_MESSAGE_SIZE - 1)
+    for(ci = 0; ci < headerLen; ci++)
     {
-      return 1;
+      vector_push_back(_(connection).outgoing, header[ci]);
     }
 
-    memcpy(connection->outgoing + connection->outgoingLength, message, length);
-    connection->outgoingLength += length;
+    for(ci = 0; ci < length; ci++)
+    {
+      vector_push_back(_(connection).outgoing, message[ci]);
+    }
+  }
+  else
+  {
+    printf("TODO: Do we reach here?\n");
+
+    for(ci = 0; ci < length; ci++)
+    {
+      vector_push_back(_(connection).outgoing, message[ci]);
+    }
   }
 
   if(_WsPollSend(connection) != 0)
@@ -415,64 +246,63 @@ int WsSend(struct WsConnection *connection, const char *message, size_t length)
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection,
+int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
   size_t i = 0;
   int headerFound = 0;
-  int nextStart = 0;
+  size_t nextStart = 0;
+  char *request = NULL;
+  vector(unsigned char) response = NULL;
+  ref(HttpHeader) header = NULL;
 
-  if(connection->incomingLength < 4)
+  /*
+   * Attempt to obtain header from the current incoming buffer.
+   */
+  header = HttpHeaderCreate(_(connection).incoming);
+
+  /*
+   * No complete header could be found. Early return for now.
+   */
+  if(header == NULL)
   {
     return 0;
   }
 
-  for(i = 0; i < connection->incomingLength - 3; i++)
-  {
-    if(connection->incoming[i] == '\r' &&
-      connection->incoming[i + 1] == '\n' &&
-      connection->incoming[i + 2] == '\r' &&
-      connection->incoming[i + 3] == '\n')
-    {
-      headerFound = 1;
-      nextStart = i + 4;
-      break;
-    }
-  }
+  response = _WsHandshakeResponse(_(connection).incoming);
 
-  if(!headerFound)
-  {
-    return 0;
-  }
-
-  char *request = strdup(connection->incoming);
-  char *response = _WsHandshakeResponse(request);
-  free(request);
-
-  connection->established = 1;
+  _(connection).established = 1;
   event->connection = connection;
 
   if(response)
   {
-    // TODO: Do we want to handle != 0?
-    WsSend(connection, response, strlen(response));
-    free(response);
-
-    connection->incomingLength -= nextStart;
-
-    memmove(connection->incoming, connection->incoming + nextStart,
-      connection->incomingLength);
-
-    memset(connection->incoming + connection->incomingLength, 0,
-      WS_MESSAGE_SIZE - connection->incomingLength);
-
+    WsSend(connection, &vector_at(response, 0), vector_size(response));
+    _(connection).websocket = 1;
+    vector_delete(response);
+    vector_erase(_(connection).incoming, 0, nextStart);
     event->type = WS_CONNECT;
   }
   else
   {
     event->type = WS_HTTP_REQUEST;
-    connection->www = 1;
+    event->http = _(server).http;
+
+    _(_(event->http).response).connection = connection;
+    _(_(event->http).response).headersSent = 0;
+
+    _(_(event->http).request).connection = connection;
+    sstream_str_cstr(_(_(event->http).request).path, "");
+
+    sstream_append_cstr(_(_(event->http).request).path,
+      sstream_cstr(HttpHeaderPath(header)));
+
+    _(connection).www = 1;
+
+    /* TODO: Send default request? */
+    //WsSend(connection, "Test data", 9);
   }
+
+  HttpHeaderDestroy(header);
 
   return 1;
 }
@@ -491,35 +321,37 @@ int _WsPollHandshake(struct WsServer *server, struct WsConnection *connection,
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollReceive(struct WsServer *server, struct WsConnection *connection,
+int _WsPollReceive(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
   int type = 0;
   size_t decodeLen = 0;
   size_t end = 0;
+  ref(WsMessageEvent) message = NULL;
 
-  char *msg = _WsDecodeFrame(connection->incoming,
-    connection->incomingLength, &type, &decodeLen, &end);
+  char *msg = _WsDecodeFrame(_(connection).incoming,
+    &type, &decodeLen, &end);
 
   if(msg)
   {
     size_t msgLen = strlen(msg);
 
+    /*
+     * Add message event data
+     */
+    message = _(server).message;
+    memcpy(_(message).data, msg, msgLen);
+    free(msg);
+    _(message).length = msgLen;
+
+    /*
+     * Prepare base event structure
+     */
     event->type = WS_MESSAGE;
     event->connection = connection;
-    event->message = &server->message;
-    memcpy(event->message->data, msg, msgLen);
-    free(msg);
-    event->message->length = msgLen;
+    event->message = message;
 
-    connection->incomingLength -= end;
-
-    memmove(connection->incoming, connection->incoming + end,
-      connection->incomingLength);
-
-    // Clear the rest of the buffer
-    //memset(connection->incoming + connection->incomingLength, 0,
-    //  WS_MESSAGE_SIZE - connection->incomingLength);
+    vector_erase(_(connection).incoming, 0, end);
 
     return 1;
   }
@@ -555,132 +387,107 @@ int _WsPollReceive(struct WsServer *server, struct WsConnection *connection,
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollConnection(struct WsServer *server,
-  struct WsConnection *connection, struct WsEvent *event)
+int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
+  struct WsEvent *event)
 {
-  fd_set readfds = {0};
-  struct timeval tv = {0};
-  int bytes = 0;
+  ref(WsDisconnectEvent) disconnect = NULL;
 
-  if(_WsPollSend(connection) != 0)
-  {
-    connection->disconnected = 1;
-    if(!connection->established) return 0;
-    if(connection->www) return 0;
-    event->disconnect = &server->disconnect;
-    event->disconnect->reason = WS_NOSEND;
-    event->type = WS_DISCONNECT;
-    event->connection = connection;
-    return 1;
-  }
+  /*
+   * Flush remaining outgoing data
+   */
+   _WsPollSend(connection);
 
-  FD_ZERO(&readfds);
-  FD_SET(connection->fd, &readfds);
-
-  if(
-#ifdef USE_POSIX
-    select(connection->fd + 1, &readfds, NULL, NULL, &tv) == -1
-#endif
-#ifdef USE_WINSOCK
-    select(server->fd + 1, &readfds, NULL, NULL, &tv) == SOCKET_ERROR
-#endif
-  )
+  /*
+   * Return if no data is waiting.
+   */
+  if(WsTcpSocketReady(_(connection).socket) == 0)
   {
     return 0;
   }
 
-  if(FD_ISSET(connection->fd, &readfds))
+  /*
+   * Send disconnect event and return if socket no longer connected.
+   */
+  if(WsTcpSocketConnected(_(connection).socket) == 0)
   {
-    bytes = WS_MESSAGE_SIZE - connection->incomingLength - 1;
+    _(connection).disconnected = 1;
+    if(!_(connection).established) return 0;
+    if(_(connection).www) return 0;
 
-    if(bytes == 0)
-    {
-      connection->disconnected = 1;
-      if(!connection->established) return 0;
-      if(connection->www) return 0;
-      event->disconnect = &server->disconnect;
-      event->disconnect->reason = WS_OVERFLOW;
-      event->type = WS_DISCONNECT;
-      event->connection = connection;
-      return 1;
-    }
+    /*
+     * Add disconnect event data
+     */
+    disconnect = _(server).disconnect;
+    _(disconnect).reason = WS_NOSEND;
 
-    bytes =
-#ifdef USE_POSIX
-    read(connection->fd,
-      connection->incoming + connection->incomingLength, bytes);
-#endif
-#ifdef USE_WINSOCK
-    recv(connection->fd,
-      connection->incoming + connection->incomingLength, bytes, 0);
-#endif
+    /*
+     * Prepare base event structure
+     */
+    event->type = WS_DISCONNECT;
+    event->connection = connection;
+    event->disconnect = disconnect;
 
-    if(bytes == 0)
-    {
-      connection->disconnected = 1;
-      if(!connection->established) return 0;
-      if(connection->www) return 0;
-      event->disconnect = &server->disconnect;
-      event->disconnect->reason = WS_CLOSED;
-      event->type = WS_DISCONNECT;
-      event->connection = connection;
-      return 1;
-    }
-#ifdef USE_POSIX
-    else if(bytes == -1)
-#endif
-#ifdef USE_WINSOCK
-    else if(bytes == SOCKET_ERROR)
-#endif
-    {
-      return 0;
-    }
-
-    connection->incomingLength += bytes;
+    return 1;
   }
 
-  if(!connection->established)
+  vector_resize(_(connection).buffer, 1024);
+  WsTcpSocketRecv(_(connection).socket, _(connection).buffer);
+
+  /*
+   * If no data was received, this means connection broken.
+   */
+  if(vector_size(_(connection).buffer) == 0)
+  {
+    printf("This should never happen\n");
+
+    /*
+     * Flag that connection is ready to be removed.
+     */
+    _(connection).disconnected = 1;
+
+    /*
+     * Ignore if connection never established or http so no initial
+     * connection event was broadcast.
+     */
+    if(!_(connection).established) return 0;
+    if(_(connection).www) return 0;
+
+    /*
+     * Add disconnect event data
+     */
+    disconnect = _(server).disconnect;
+    _(disconnect).reason = WS_CLOSED;
+
+    /*
+     * Prepare base event structure
+     */
+    event->type = WS_DISCONNECT;
+    event->connection = connection;
+    event->disconnect = disconnect;
+
+    return 1;
+  }
+
+  /*
+   * Copy data from buffer into incoming stream.
+   */
+  vector_insert(_(connection).incoming,
+    vector_size(_(connection).incoming),
+    _(connection).buffer, 0,
+    vector_size(_(connection).buffer));
+
+  if(!_(connection).established)
   {
     return _WsPollHandshake(server, connection, event);
   }
 
-  if(connection->www)
+  if(_(connection).www)
   {
+    printf("Warning: HTTP client is sending more data?\n");
     return 0;
   }
 
   return _WsPollReceive(server, connection, event);
-}
-
-/****************************************************************************
- * WS_LL_REMOVE
- *
- * Remove a node from the given list whilst joining up the next and prev.
- *
- * ROOT - The root node.
- * CURR - The current iterator.
- *
- ****************************************************************************/
-#define WS_LL_REMOVE(ROOT, CURR)   \
-{                                  \
-  void *toFree = NULL;             \
-  if(!CURR->prev)                  \
-  {                                \
-    ROOT = CURR->next;             \
-  }                                \
-  else                             \
-  {                                \
-    CURR->prev->next = CURR->next; \
-  }                                \
-                                   \
-  if(CURR->next)                   \
-  {                                \
-    CURR->next->prev = CURR->prev; \
-  }                                \
-                                   \
-  toFree = CURR;                   \
-  CURR = CURR->next;               \
-  free(toFree);                    \
 }
 
 /****************************************************************************
@@ -696,73 +503,96 @@ int _WsPollConnection(struct WsServer *server,
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollConnections(struct WsServer *server, struct WsEvent *event)
+int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 {
-  struct WsConnection *conn = NULL;
+  size_t curr = 0;
+  size_t end = 0;
+  ref(WsConnection) conn = NULL;
 
-  conn = server->connections;
+  curr = _(server).nextToPoll;
+  end = curr;
 
-  while(conn)
+  while(1)
   {
-    if(conn->disconnected)
+    if(vector_size(_(server).connections) < 1)
     {
-#ifdef USE_POSIX
-      close(conn->fd);
-#endif
-#ifdef USE_WINSOCK
-      closesocket(conn->fd);
-#endif
-      WS_LL_REMOVE(server->connections, conn)
-      continue;
+      _(server).nextToPoll = 0;
+
+      return 0;
     }
 
-    if(_WsPollConnection(server, conn, event))
+    if(curr >= vector_size(_(server).connections))
     {
-      return 1;
+      curr = 0;
     }
 
-    conn = conn->next;
+    if(end >= vector_size(_(server).connections))
+    {
+      end = vector_size(_(server).connections) - 1;
+    }
+
+    conn = vector_at(_(server).connections, curr);
+
+    if(_(conn).disconnected == 1)
+    {
+      _WsConnectionDestroy(conn);
+      vector_erase(_(server).connections, curr, 1);
+    }
+    else
+    {
+      if(_WsPollConnection(server, conn, event))
+      {
+        _(server).nextToPoll++;
+
+        return 1;
+      }
+
+      curr++;
+
+      if(curr >= vector_size(_(server).connections))
+      {
+        curr = 0;
+      }
+
+      if(curr == end) break;
+    }
   }
 
   return 0;
 }
 
-void _WsWaitForEvent(struct WsServer *server, int timeout)
+int _WsWaitForEvent(ref(WsServer) server, int timeout)
 {
-  struct WsConnection *conn = NULL;
-  fd_set readfds = {0};
-  fd_set writefds = {0};
-  struct timeval tv = {0};
-  int maxFd = 0;
+  vector(ref(WsTcpSocket)) reads = NULL;
+  vector(ref(WsTcpSocket)) writes = NULL;
+  size_t ci = 0;
+  ref(WsConnection) conn = NULL;
+  int rtn = 0;
 
-  tv.tv_sec = timeout / 1000;
-  tv.tv_usec = timeout % 1000;
+  reads = vector_new(ref(WsTcpSocket));
+  writes = vector_new(ref(WsTcpSocket));
+  vector_push_back(reads, _(server).socket);
 
-  FD_ZERO(&readfds);
-  FD_ZERO(&writefds);
-
-  FD_SET(server->fd, &readfds);
-  maxFd = server->fd;
-  conn = server->connections;
-
-  while(conn)
+  for(ci = 0; ci < vector_size(_(server).connections); ci++)
   {
-    FD_SET(conn->fd, &readfds);
-    if(maxFd < conn->fd) maxFd = conn->fd;
+    conn = vector_at(_(server).connections, ci);
+    vector_push_back(reads, _(conn).socket);
 
-    if(conn->outgoingLength > 0)
+    if(vector_size(_(conn).outgoing) > 0)
     {
-      FD_SET(conn->fd, &writefds);
+      vector_push_back(writes, _(conn).socket);
     }
-
-    conn = conn->next;
   }
 
-  select(maxFd, &readfds, &writefds, NULL, &tv);
+  rtn = WsTcpSocketsReady(reads, writes, timeout);
+  vector_delete(reads);
+  vector_delete(writes);
+
+  return rtn;
 }
 
 /****************************************************************************
- * WsPoll
+ * WsServerPoll
  *
  * Poll the client sockets and listen socket for events. If any occurs then
  * immediately return it.
@@ -770,27 +600,35 @@ void _WsWaitForEvent(struct WsServer *server, int timeout)
  * server - The server structure containing the listen socket.
  * event  - The event structure to populate.
  *
- * Returns 1 if an event has occurred otherwise returns 0.
+ * Returns event if one has occurred otherwise returns NULL.
  *
  ****************************************************************************/
-int WsPoll(struct WsServer *server, int timeout, struct WsEvent *event)
+int WsServerPoll(ref(WsServer) server, int timeout, struct WsEvent *event)
 {
   // TODO: Only clear when needed
-  memset(event, 0, sizeof(*event));
-  memset(&server->disconnect, 0, sizeof(server->disconnect));
-  //memset(&server->message, 0, sizeof(server->message));
+  //sreset(_(server).disconnect);
+  //sreset(_(server).message);
+  //sreset(_(server).http);
 
-  if(timeout > 0)
+  /*
+   * If timeout specified or infinite (-1) then batch select to wait for
+   * an event to occur in that amount of time. If 0 timeout then just
+   * process sockets as usual because waiting has some overhead.
+   */
+  if(timeout != 0)
   {
-    _WsWaitForEvent(server, timeout);
+    /*
+     * If sockets don't report any events, then early exit.
+     */
+    if(!_WsWaitForEvent(server, timeout))
+    {
+      return 0;
+    }
   }
+
+  _WsPollConnectionRequests(server);
 
   if(_WsPollConnections(server, event))
-  {
-    return 1;
-  }
-
-  if(_WsPollConnectionRequests(server, event))
   {
     return 1;
   }
@@ -798,3 +636,39 @@ int WsPoll(struct WsServer *server, int timeout, struct WsEvent *event)
   return 0;
 }
 
+void WsServerClose(ref(WsServer) server)
+{
+  size_t ci = 0;
+
+  release(_(server).disconnect);
+  release(_(server).message);
+  sstream_delete(_(_(_(server).http).request).path);
+  release(_(_(server).http).response);
+  release(_(_(server).http).request);
+  release(_(server).http);
+
+  for(ci = 0; ci < vector_size(_(server).connections); ci++)
+  {
+    _WsConnectionDestroy(vector_at(_(server).connections, ci));
+  }
+
+  vector_delete(_(server).connections);
+  WsTcpSocketClose(_(server).socket);
+  release(server);
+}
+
+void WsHttpResponseWrite(ref(WsHttpResponse) response, char *data)
+{
+  if(_(response).headersSent != 0)
+  {
+    _WsPanic("Headers already sent");
+  }
+
+  WsSend(_(response).connection, data, strlen(data));
+  _(response).headersSent = 1;
+}
+
+ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) request)
+{
+  return _(request).path;
+}

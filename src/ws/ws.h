@@ -1,9 +1,10 @@
 #ifndef WS_WS_H
 #define WS_WS_H
 
+#include <stent/stent.h>
+
 #include <stddef.h>
 
-#define WS_MESSAGE_SIZE 64 * 1024 * 1024
 #define WS_CLIENT_QUEUE 8
 
 #define WS_HTTP_REQUEST 1
@@ -17,10 +18,12 @@
 
 struct WsServer;
 struct WsConnection;
+struct WsHttpResponse;
+struct WsHttpRequest;
 
 struct WsMessageEvent
 {
-  char data[WS_MESSAGE_SIZE];
+  char data[1024];
   size_t length;
 };
 
@@ -29,21 +32,27 @@ struct WsDisconnectEvent
   int reason;
 };
 
+struct WsHttpEvent
+{
+  ref(WsHttpRequest) request;
+  ref(WsHttpResponse) response;
+};
+
 struct WsEvent
 {
   int type;
-  struct WsConnection *connection;
-  struct WsMessageEvent *message;
-  struct WsDisconnectEvent *disconnect;
+  ref(WsConnection) connection;
+  ref(WsHttpEvent) http;
+  ref(WsMessageEvent) message;
+  ref(WsDisconnectEvent) disconnect;
 };
 
-struct WsServer *WsListen(int port);
-int WsSend(struct WsConnection *connection, const char *message, size_t length);
-int WsPoll(struct WsServer *server, int timeout, struct WsEvent *event);
-void WsClose(struct WsServer *server);
+ref(WsServer) WsServerListen(int port);
+int WsSend(ref(WsConnection) connection, const char *message, size_t length);
+int WsServerPoll(ref(WsServer) server, int timeout, struct WsEvent *event);
+void WsServerClose(ref(WsServer) server);
 
-typedef struct WsServer WsServer;
-typedef struct WsEvent WsEvent;
-typedef struct WsConnection WsConnection;
+void WsHttpResponseWrite(ref(WsHttpResponse) response, char *data);
+ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) request);
 
 #endif
