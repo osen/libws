@@ -657,6 +657,16 @@ void WsServerClose(ref(WsServer) server)
   release(server);
 }
 
+ref(WsHttpRequest) WsHttpEventRequest(ref(WsHttpEvent) ctx)
+{
+  return _(ctx).request;
+}
+
+ref(WsHttpResponse) WsHttpEventResponse(ref(WsHttpEvent) ctx)
+{
+  return _(ctx).response;
+}
+
 void WsHttpResponseWrite(ref(WsHttpResponse) response, char *data)
 {
   if(_(response).headersSent != 0)

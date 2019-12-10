@@ -52,6 +52,9 @@ int WsSend(ref(WsConnection) connection, const char *message, size_t length);
 int WsServerPoll(ref(WsServer) server, int timeout, struct WsEvent *event);
 void WsServerClose(ref(WsServer) server);
 
+ref(WsHttpRequest) WsHttpEventRequest(ref(WsHttpEvent) ctx);
+ref(WsHttpResponse) WsHttpEventResponse(ref(WsHttpEvent) ctx);
+
 void WsHttpResponseWrite(ref(WsHttpResponse) response, char *data);
 ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) request);
 

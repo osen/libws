@@ -9,18 +9,29 @@ int running;
 
 void handle_http(ref(WsHttpEvent) http)
 {
-  printf("HTTP Request [%s]\n",
-    sstream_cstr(WsHttpRequestPath(_(http).request)));
+  ref(WsHttpRequest) request = NULL;
+  ref(WsHttpResponse) response = NULL;
 
-  if(strcmp(sstream_cstr(WsHttpRequestPath(_(http).request)),
-    "/quit") == 0)
+  request = WsHttpEventRequest(http);
+  response = WsHttpEventResponse(http);
+  printf("HTTP Request [%s]\n", sstream_cstr(WsHttpRequestPath(request)));
+
+  if(strcmp(sstream_cstr(WsHttpRequestPath(request)), "/quit") == 0)
   {
     running = 0;
-    return;
   }
-
-  //WsHttpResponseWrite(_(http).response, "Hello World");
-  WsHttpResponseWrite(_(http).response, sstream_cstr(echoHtml));
+  else if(strcmp(sstream_cstr(WsHttpRequestPath(request)), "/hello") == 0)
+  {
+    WsHttpResponseWrite(response, "Hello World");
+  }
+  else if(strcmp(sstream_cstr(WsHttpRequestPath(request)), "/echo") == 0)
+  {
+    WsHttpResponseWrite(response, sstream_cstr(echoHtml));
+  }
+  else
+  {
+    WsHttpResponseWrite(response, "404");
+  }
 }
 
 ref(sstream) load_file(char *path)
@@ -83,3 +94,4 @@ int main()
 
   return 0;
 }
+
