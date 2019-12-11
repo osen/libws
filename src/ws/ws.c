@@ -434,63 +434,64 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
  ****************************************************************************/
 int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 {
-  size_t curr = 0;
+  size_t begin = 0;
   size_t end = 0;
   ref(WsConnection) conn = NULL;
+  size_t ci = 0;
+  int rtn = 0;
 
-  curr = _(server).nextToPoll;
-  end = curr;
-
-  while(1)
+  /*
+   * Early return if no connections to poll.
+   */
+  if(vector_size(_(server).connections) < 1)
   {
-    if(vector_size(_(server).connections) < 1)
-    {
-      _(server).nextToPoll = 0;
+    return 0;
+  }
 
-      return 0;
+  begin = _(server).nextToPoll;
+  end = begin + 1;
+
+  for(ci = begin; ci != end; ci++)
+  {
+    /*
+     * If the end of the vector has been reached, start from beginning again
+     * until the end element is encountered (first connection we started with).
+     */
+    if(ci >= vector_size(_(server).connections))
+    {
+      ci = 0;
     }
 
-    if(curr >= vector_size(_(server).connections))
-    {
-      curr = 0;
-    }
+    conn = vector_at(_(server).connections, ci);
 
-    if(end >= vector_size(_(server).connections))
+    if(_WsPollConnection(server, conn, event))
     {
-      end = vector_size(_(server).connections) - 1;
-    }
+      rtn = 1;
 
-    conn = vector_at(_(server).connections, curr);
+      break;
+    }
+  }
+
+  for(ci = 0; ci < vector_size(_(server).connections); ci++)
+  {
+    conn = vector_at(_(server).connections, ci);
 
     if(_(conn).state == WS_STATE_DISCONNECTED)
     {
       _WsConnectionDestroy(conn);
-      vector_erase(_(server).connections, curr, 1);
-    }
-    else
-    {
-      if(_WsPollConnection(server, conn, event))
-      {
-        _(server).nextToPoll++;
-
-        return 1;
-      }
-
-      curr++;
-
-      if(curr >= vector_size(_(server).connections))
-      {
-        curr = 0;
-      }
-
-      if(curr == end)
-      {
-        break;
-      }
+      vector_erase(_(server).connections, ci, 1);
+      ci--;
     }
   }
 
-  return 0;
+  _(server).nextToPoll++;
+
+  if(_(server).nextToPoll >= vector_size(_(server).connections))
+  {
+    _(server).nextToPoll = 0;
+  }
+
+  return rtn;
 }
 
 int _WsWaitForEvent(ref(WsServer) server, int timeout)
