@@ -9,7 +9,7 @@ add_library(ws
   src/ws/ws.c
   src/ws/sha1.c
   src/ws/base64.c
-  src/ws/handshake.c
+  src/ws/WebSocket.c
   src/ws/TcpSocket.c
   src/ws/HttpHeader.c
 )

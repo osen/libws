@@ -191,7 +191,7 @@ uint16_t f_uint16(uint8_t *value)
  *
  ****************************************************************************/
 char *_WsDecodeFrame(vector(unsigned char) incoming,
-  size_t *decodeLen, struct WsFrameInfo *fi)
+  struct WsFrameInfo *fi)
 {
   char *msg = NULL;       /* Decoded message         */
   uint8_t maskStart;      /* Index where mask starts */
@@ -250,7 +250,6 @@ char *_WsDecodeFrame(vector(unsigned char) incoming,
       maskStart = 10;
     }
 
-    *decodeLen = payloadLength;
     fi->dataStart = maskStart + 4;
     fi->dataEnd = fi->dataStart + payloadLength;
 

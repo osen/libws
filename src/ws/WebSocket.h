@@ -14,4 +14,4 @@ struct WsFrameInfo
 };
 
 char *_WsDecodeFrame(vector(unsigned char) incoming,
-  size_t *decodeLen, struct WsFrameInfo *fi);
+  struct WsFrameInfo *fi);

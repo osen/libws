@@ -188,7 +188,7 @@ void WsSend(ref(WsConnection) connection, vector(unsigned char) data)
 }
 
 /****************************************************************************
- * _WsPollHandshake
+ * _WsPollConnectionInitial
  *
  * If the header is complete, attempt handshake and send response. Ensure
  * that if there was trailing data that we move it to the beginning of the
@@ -202,14 +202,11 @@ void WsSend(ref(WsConnection) connection, vector(unsigned char) data)
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
+int _WsPollConnectionInitial(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
   size_t i = 0;
   int headerFound = 0;
-/*
-  size_t nextStart = 0;
-*/
   char *request = NULL;
   vector(unsigned char) response = NULL;
   ref(HttpHeader) header = NULL;
@@ -227,13 +224,12 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
     return 0;
   }
 
-  response = _WsHandshakeResponse(_(connection).incoming);
   event->connection = connection;
+  response = _WsHandshakeResponse(_(connection).incoming);
 
   if(response)
   {
     _(connection).state = WS_STATE_WEBSOCKET;
-    /*WsSend(connection, response);*/
 
     vector_insert(_(connection).outgoing,
       vector_size(_(connection).outgoing),
@@ -243,8 +239,8 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
     vector_delete(response);
 /*
     vector_erase(_(connection).incoming, 0, nextStart);
-*/
     vector_clear(_(connection).incoming);
+*/
     event->type = WS_CONNECT;
   }
   else
@@ -272,7 +268,7 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
 }
 
 /****************************************************************************
- * _WsPollReceive
+ * _WsPollConnectionWebSocket
  *
  * Attempt to decode incoming. If it fails, make assumption that the rest
  * of the data has not yet been received and continue. If data was decoded
@@ -285,16 +281,14 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollReceive(ref(WsServer) server, ref(WsConnection) connection,
+int _WsPollConnectionWebSocket(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
-  size_t decodeLen = 0;
   ref(WsMessageEvent) message = NULL;
   struct WsFrameInfo fi = {0};
   ref(WsDisconnectEvent) disconnect = NULL;
 
-  char *msg = _WsDecodeFrame(_(connection).incoming,
-    &decodeLen, &fi);
+  char *msg = _WsDecodeFrame(_(connection).incoming, &fi);
 
   if(!fi.final)
   {
@@ -447,11 +441,11 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
 
   if(_(connection).state == WS_STATE_INITIAL)
   {
-    return _WsPollHandshake(server, connection, event);
+    return _WsPollConnectionInitial(server, connection, event);
   }
   else if(_(connection).state == WS_STATE_WEBSOCKET)
   {
-    return _WsPollReceive(server, connection, event);
+    return _WsPollConnectionWebSocket(server, connection, event);
   }
 
   _WsPanic("Should not reach");
