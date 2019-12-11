@@ -3,12 +3,68 @@
   <head>
     <title>Echo Test</title>
     <script>
-window.onload = function()
+var socket = null;
+
+function output(message)
 {
-  alert("Hello World");
-};
+  var log = document.getElementById("log");
+
+  log.innerHTML += message + "<br />";
+}
+
+function connected()
+{
+  output("Connected");
+
+  var send = document.getElementById("send")
+  send.style.visibility = "visible";
+  var message = document.getElementById("message")
+  message.style.visibility = "visible";
+  var disconnect = document.getElementById("disconnect")
+  disconnect.style.visibility = "visible";
+}
+
+function error()
+{
+  output("Error");
+}
+
+function close()
+{
+  output("Close");
+}
+
+function send()
+{
+  var message = document.getElementById("message")
+  socket.send(message.value);
+  output("Sent: " + message.value);
+}
+
+function disconnect()
+{
+  socket.close();
+}
+
+function connect()
+{
+  var url = "" + window.location;
+  url = url.replace("http", "ws");
+  output("Connecting to "+ url);
+  socket = new WebSocket(url);
+
+  socket.onclose = close;
+  socket.onopen = connected;
+  socket.onerror = error;
+}
     </script>
   </head>
   <body>
+    <button onclick="connect()">Connect</button>
+    <input id="message" style="visibility: hidden"></input>
+    <button id="send" style="visibility: hidden" onclick="send()">Send</button>
+    <button id="disconnect" style="visibility: hidden" onclick="disconnect()">Disconnect</button>
+    <hr>
+    <div style="width: 100%; background: gray" id="log"></div>
   </body>
 </html>

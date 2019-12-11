@@ -1,5 +1,6 @@
 #include "sha1.h"
 #include "base64.h"
+#include "WebSocket.h"
 
 #include "stent.h"
 
@@ -19,11 +20,6 @@
 "Upgrade: websocket\r\n"               \
 "Connection: Upgrade\r\n"              \
 "Sec-WebSocket-Accept: "
-
-#define WS_FIN 128
-#define WS_FR_OP_TXT  1
-#define WS_FR_OP_CLSE 8
-#define WS_FR_OP_UNSUPPORTED 0xF
 
 unsigned char *_WsHandshakeAccept(char *wsKey)
 {
@@ -55,6 +51,42 @@ vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request)
   unsigned char *accept = NULL;
   vector(unsigned char) rtn = NULL;
   char *req = NULL;
+  size_t di = 0;
+  int marker = -1;
+
+  /*
+   * Incoming stream not large enough to contain 4 byte header separator
+   * consisting of "\r\n\r\n". Early out.
+   */
+  if(vector_size(request) < 4)
+  {
+    return NULL;
+  }
+
+  /*
+   * Find the header separator (\r\n\r\n) and store the position of the
+   * start of subsequent content.
+   */
+  for(di = 0; di < vector_size(request) - 3; di++)
+  {
+    if(vector_at(request, di) == '\r' &&
+      vector_at(request, di + 1) == '\n' &&
+      vector_at(request, di + 2) == '\r' &&
+      vector_at(request, di + 3) == '\n')
+    {
+      marker = di;
+
+      break;
+    }
+  }
+
+  /*
+   * The header separator was not found. Early exit.
+   */
+  if(marker == -1)
+  {
+    return NULL;
+  }
 
   req = &vector_at(request, 0);
 
@@ -84,6 +116,21 @@ vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request)
   strcat(&vector_at(rtn, 0), "\r\n\r\n");
 
   free(accept);
+
+  vector_erase(request, 0, marker + 4);
+
+/*
+  {
+    size_t ci = 0;
+
+    for(ci = 0; ci < vector_size(request); ci++)
+    {
+      printf("%c", vector_at(request, ci));
+    }
+
+    printf("\n");
+  }
+*/
 
   return rtn;
 }
@@ -137,84 +184,103 @@ uint16_t f_uint16(uint8_t *value)
  *
  * frame     - The current buffer containing a potentially complete frame.
  * length    - The lengh of data (to avoid strlen).
- * type      - Output what the frame represented.
  * decodeLen - Output the contained frames length (to avoid strlen).
  * end       - Output the position of the first byte of the next message.
  *
  * Returns the decoded frames message.
  *
  ****************************************************************************/
-char *_WsDecodeFrame(vector(unsigned char) _frame,
-  int *type, size_t *decodeLen, size_t *end)
+char *_WsDecodeFrame(vector(unsigned char) incoming,
+  size_t *decodeLen, struct WsFrameInfo *fi)
 {
-  char *frame = NULL;
-  size_t length = 0;
-  char *msg;              /* Decoded message.   */
-  uint8_t mask;           /* Payload is masked? */
-  uint8_t idx_first_mask; /* Index masking key. */
-  uint8_t idx_first_data; /* Index data.        */
-  size_t data_length;     /* Data length.       */
-  uint8_t masks[4];       /* Masking key.       */
-  size_t i,j;             /* Loop indexes.      */
-  uint8_t *uframe;        /* Casted bytes       */
+  char *msg = NULL;       /* Decoded message         */
+  uint8_t maskStart;      /* Index where mask starts */
+  size_t payloadLength;   /* Data length             */
+  uint8_t masks[4];       /* Masking key             */
+  size_t i,j;             /* Loop indexes            */
+  uint8_t *uframe = NULL; /* Casted bytes            */
+  uint8_t first = 0;
+  uint8_t second = 0;
 
-  frame = &vector_at(_frame, 0);
-  length = vector_size(_frame);
-
-  uframe = (uint8_t *)frame;
-  msg = NULL;
-
-  if(length < 1) return NULL;
-
-  if(uframe[0] == (WS_FIN | WS_FR_OP_TXT))
+  /*
+   * Early return, no data to process or buffer not yet large
+   * enough for mask and payload info.
+   */
+  if(vector_size(incoming) < 2)
   {
-    *type = WS_FR_OP_TXT;
-    idx_first_mask = 2;
-    if(length < 2) return NULL;
-    mask = uframe[1];
-    data_length = mask & 0x7F;
+    return NULL;
+  }
 
-    if(data_length == 126)
+  /*
+   * Store first and second byte for analysis.
+   */
+  first = vector_at(incoming, 0);
+  second = vector_at(incoming, 1);
+
+  uframe = (uint8_t *)&vector_at(incoming, 0);
+
+  if((first & 128 /* 10000000 */) != 0)
+  {
+    fi->final = 1;
+  }
+
+  if((second & 128 /* 10000000 */) != 0)
+  {
+    fi->masked = 1;
+  }
+
+  if((first & 1 /* 00000001 */) != 0)
+  {
+    fi->opcode = WS_FRAME_TEXT;
+
+    /*
+     * Obtain all but the first bit to contain the length.
+     */
+    payloadLength = second & 0x7F;
+    maskStart = 2;
+
+    if(payloadLength == 126)
     {
-      idx_first_mask = 4;
-      data_length = f_uint16(&uframe[2]);
+      payloadLength = f_uint16(&uframe[2]);
+      maskStart = 4;
     }
-    else if(data_length == 127)
+    else if(payloadLength == 127)
     {
-      idx_first_mask = 10;
-      data_length = f_uint64(&uframe[2]);
+      payloadLength = f_uint64(&uframe[2]);
+      maskStart = 10;
     }
 
-    *decodeLen = data_length;
-    idx_first_data = idx_first_mask + 4;
-    *end = idx_first_data + data_length;
+    *decodeLen = payloadLength;
+    fi->dataStart = maskStart + 4;
+    fi->dataEnd = fi->dataStart + payloadLength;
 
-    if(*end > length)
+    if(fi->dataEnd > vector_size(incoming))
     {
       return NULL;
     }
 
-    masks[0] = uframe[idx_first_mask];
-    masks[1] = uframe[idx_first_mask + 1];
-    masks[2] = uframe[idx_first_mask + 2];
-    masks[3] = uframe[idx_first_mask + 3];
+    masks[0] = vector_at(incoming, maskStart);
+    masks[1] = vector_at(incoming, maskStart + 1);
+    masks[2] = vector_at(incoming, maskStart + 2);
+    masks[3] = vector_at(incoming, maskStart + 3);
 
-    msg = malloc(sizeof(unsigned char) * (data_length + 1));
+    msg = malloc(sizeof(unsigned char) * (payloadLength + 1));
 
-    for(i = idx_first_data, j = 0; i < *end; i++, j++)
+    for(i = fi->dataStart, j = 0; i < fi->dataEnd; i++, j++)
     {
-      msg[j] = uframe[i] ^ masks[j % 4];
+      msg[j] = vector_at(incoming, i) ^ masks[j % 4];
     }
 
     msg[j] = '\0';
   }
-  else if(uframe[0] == (WS_FIN | WS_FR_OP_CLSE) )
+  else if((first & 8 /* 00001000 */) != 0)
   {
-    *type = WS_FR_OP_CLSE;
+    fi->opcode = WS_FRAME_CLOSE;
   }
   else
   {
-    *type = uframe[0] & 0x0F;
+    fi->opcode = WS_FRAME_UNKNOWN;
+    printf("Unknown frame opcode\n");
   }
 
   return msg;

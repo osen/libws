@@ -1,6 +1,7 @@
 #include "ws.h"
 #include "TcpSocket.h"
 #include "HttpHeader.h"
+#include "WebSocket.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -51,9 +52,6 @@ struct WsHttpResponse
 
 vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request);
 unsigned char *_WsHandshakeAccept(char *wsKey);
-
-char *_WsDecodeFrame(vector(unsigned char) frame,
-  int *type, size_t *decodeLen, size_t *end);
 
 ref(WsServer) WsServerListen(int port)
 {
@@ -209,7 +207,9 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
 {
   size_t i = 0;
   int headerFound = 0;
+/*
   size_t nextStart = 0;
+*/
   char *request = NULL;
   vector(unsigned char) response = NULL;
   ref(HttpHeader) header = NULL;
@@ -232,10 +232,19 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
 
   if(response)
   {
-    WsSend(connection, response);
     _(connection).state = WS_STATE_WEBSOCKET;
+    /*WsSend(connection, response);*/
+
+    vector_insert(_(connection).outgoing,
+      vector_size(_(connection).outgoing),
+      response, 0, vector_size(response));
+
+    _WsPollSend(connection);
     vector_delete(response);
+/*
     vector_erase(_(connection).incoming, 0, nextStart);
+*/
+    vector_clear(_(connection).incoming);
     event->type = WS_CONNECT;
   }
   else
@@ -279,13 +288,42 @@ int _WsPollHandshake(ref(WsServer) server, ref(WsConnection) connection,
 int _WsPollReceive(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
-  int type = 0;
   size_t decodeLen = 0;
-  size_t end = 0;
   ref(WsMessageEvent) message = NULL;
+  struct WsFrameInfo fi = {0};
+  ref(WsDisconnectEvent) disconnect = NULL;
 
   char *msg = _WsDecodeFrame(_(connection).incoming,
-    &type, &decodeLen, &end);
+    &decodeLen, &fi);
+
+  if(!fi.final)
+  {
+    printf("Not final...\n");
+  }
+
+  if(!fi.masked)
+  {
+    printf("Not masked...\n");
+  }
+
+  if(fi.opcode == WS_FRAME_CLOSE)
+  {
+    /*
+     * Add disconnect event data
+     */
+    disconnect = _(server).disconnect;
+    _(disconnect).reason = WS_CLOSED;
+
+    /*
+     * Prepare base event structure
+     */
+    event->type = WS_DISCONNECT;
+    event->connection = connection;
+    event->disconnect = disconnect;
+    _(connection).state = WS_STATE_DISCONNECTED;
+
+    return 1;
+  }
 
   if(msg)
   {
@@ -306,7 +344,7 @@ int _WsPollReceive(ref(WsServer) server, ref(WsConnection) connection,
     event->connection = connection;
     event->message = message;
 
-    vector_erase(_(connection).incoming, 0, end);
+    vector_erase(_(connection).incoming, 0, fi.dataEnd);
 
     return 1;
   }
@@ -415,6 +453,8 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
   {
     return _WsPollReceive(server, connection, event);
   }
+
+  _WsPanic("Should not reach");
 
   return 0;
 }

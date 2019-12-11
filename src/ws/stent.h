@@ -741,7 +741,7 @@ void _vector_erase(vector(void) ptr, size_t idx, size_t num)
   if(idx >= __(v)->size ||
     idx + num > __(v)->size)
   {
-    fprintf(stderr, "Error: Index out of bounds\n");
+    fprintf(stderr, "Error: Index out of bounds [size=%i] [index=%i]\n", (int)_(v).size, (int)(idx + num));
     abort();
   }
 
