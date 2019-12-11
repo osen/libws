@@ -64,6 +64,7 @@ ref(WsServer) WsServerListen(int port)
    */
   _(rtn).disconnect = allocate(WsDisconnectEvent);
   _(rtn).message = allocate(WsMessageEvent);
+  _(_(rtn).message).data = vector_new(unsigned char);
 
   _(rtn).http = allocate(WsHttpEvent);
   _(_(rtn).http).request = allocate(WsHttpRequest);
@@ -327,7 +328,7 @@ int _WsPollConnectionWebSocket(ref(WsServer) server, ref(WsConnection) connectio
      * Add message event data
      */
     message = _(server).message;
-    memcpy(_(message).data, msg, msgLen);
+    memcpy(_(message)._data, msg, msgLen);
     free(msg);
     _(message).length = msgLen;
 
@@ -605,6 +606,7 @@ void WsServerClose(ref(WsServer) server)
   size_t ci = 0;
 
   release(_(server).disconnect);
+  vector_delete(_(_(server).message).data);
   release(_(server).message);
   vector_delete(_(_(_(server).http).response).data);
   release(_(_(server).http).response);
