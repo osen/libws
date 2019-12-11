@@ -483,7 +483,10 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
         curr = 0;
       }
 
-      if(curr == end) break;
+      if(curr == end)
+      {
+        break;
+      }
     }
   }
 
@@ -594,6 +597,11 @@ ref(WsHttpResponse) WsHttpEventResponse(ref(WsHttpEvent) ctx)
   return _(ctx).response;
 }
 
+void WsHttpResponseSetStatusCode(ref(WsHttpResponse) ctx, int status)
+{
+  _(ctx).status = status;
+}
+
 void WsHttpResponseWrite(ref(WsHttpResponse) ctx, char *data)
 {
   size_t di = 0;
@@ -626,12 +634,17 @@ void WsHttpResponseSend(ref(WsHttpResponse) ctx)
 
   _(ctx).headersSent = 1;
 
+  /*
+   * TODO: Is "OK" standard?
+   * "HTTP/1.1 200 OK\r\n"
+   */
+
   sprintf(header,
-    "HTTP/1.1 200 OK\r\n"
+    "HTTP/1.1 %i\r\n"
     "Content-Type: text/html\r\n"
     "Content-Length: %i\r\n"
     "Connection: close\r\n"
-    "\r\n", (int)vector_size(_(ctx).data));
+    "\r\n", _(ctx).status, (int)vector_size(_(ctx).data));
 
   headerLen = strlen(header);
   connection = _(ctx).connection;

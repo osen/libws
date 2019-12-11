@@ -30,6 +30,7 @@ void handle_http(ref(WsHttpEvent) http)
   }
   else
   {
+    WsHttpResponseSetStatusCode(response, 404);
     WsHttpResponseWrite(response, "<h1>404 Not Found</h1><hr><i>raptor httpd</i>");
   }
 
@@ -86,11 +87,9 @@ int main()
       {
         printf("Unhandled Event: %i\n", event.type);
       }
-    }
 
-/*
-    printf("Tick\n");
-*/
+      printf("Tick\n");
+    }
   }
 
   WsServerClose(server);
