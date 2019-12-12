@@ -108,7 +108,7 @@ void _WsPollConnectionRequests(ref(WsServer) server)
   }
 }
 
-void _WsPollSend(ref(WsConnection) connection)
+void _WsConnectionPollSend(ref(WsConnection) connection)
 {
   /*
    * If the buffer is empty, early return.
@@ -185,11 +185,11 @@ void WsSend(ref(WsConnection) connection, vector(unsigned char) data)
     vector_push_back(_(connection).outgoing, vector_at(data, ci));
   }
 
-  _WsPollSend(connection);
+  _WsConnectionPollSend(connection);
 }
 
 /****************************************************************************
- * _WsPollConnectionInitial
+ * _WsConnectionProcessInitial
  *
  * If the header is complete, attempt handshake and send response. Ensure
  * that if there was trailing data that we move it to the beginning of the
@@ -203,7 +203,7 @@ void WsSend(ref(WsConnection) connection, vector(unsigned char) data)
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollConnectionInitial(ref(WsServer) server, ref(WsConnection) connection,
+int _WsConnectionProcessInitial(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
   size_t i = 0;
@@ -236,7 +236,7 @@ int _WsPollConnectionInitial(ref(WsServer) server, ref(WsConnection) connection,
       vector_size(_(connection).outgoing),
       response, 0, vector_size(response));
 
-    _WsPollSend(connection);
+    _WsConnectionPollSend(connection);
     vector_delete(response);
 /*
     vector_erase(_(connection).incoming, 0, nextStart);
@@ -269,7 +269,7 @@ int _WsPollConnectionInitial(ref(WsServer) server, ref(WsConnection) connection,
 }
 
 /****************************************************************************
- * _WsPollConnectionWebSocket
+ * _WsConnectionProcessWebSocket
  *
  * Attempt to decode incoming. If it fails, make assumption that the rest
  * of the data has not yet been received and continue. If data was decoded
@@ -282,7 +282,7 @@ int _WsPollConnectionInitial(ref(WsServer) server, ref(WsConnection) connection,
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollConnectionWebSocket(ref(WsServer) server, ref(WsConnection) connection,
+int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
   ref(WsMessageEvent) message = NULL;
@@ -348,7 +348,7 @@ int _WsPollConnectionWebSocket(ref(WsServer) server, ref(WsConnection) connectio
 }
 
 /****************************************************************************
- * _WsPollConnection
+ * _WsConnectionPoll
  *
  * Attempt to send outgoing. If there are any issues then disconnect. Read
  * bytes into incoming buffer if there are any available. If the buffer
@@ -362,7 +362,7 @@ int _WsPollConnectionWebSocket(ref(WsServer) server, ref(WsConnection) connectio
  * Returns 1 if an event has occurred otherwise returns 0.
  *
  ****************************************************************************/
-int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
+int _WsConnectionPoll(ref(WsServer) server, ref(WsConnection) connection,
   struct WsEvent *event)
 {
   ref(WsDisconnectEvent) disconnect = NULL;
@@ -405,7 +405,7 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
   /*
    * Flush any outgoing data
    */
-   _WsPollSend(connection);
+   _WsConnectionPollSend(connection);
 
   /*
    * If connection is Http and buffer is empty, assume that the
@@ -442,11 +442,11 @@ int _WsPollConnection(ref(WsServer) server, ref(WsConnection) connection,
 
   if(_(connection).state == WS_STATE_INITIAL)
   {
-    return _WsPollConnectionInitial(server, connection, event);
+    return _WsConnectionProcessInitial(server, connection, event);
   }
   else if(_(connection).state == WS_STATE_WEBSOCKET)
   {
-    return _WsPollConnectionWebSocket(server, connection, event);
+    return _WsConnectionProcessWebSocket(server, connection, event);
   }
 
   _WsPanic("Should not reach");
@@ -499,7 +499,7 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 
     conn = vector_at(_(server).connections, ci);
 
-    if(_WsPollConnection(server, conn, event))
+    if(_WsConnectionPoll(server, conn, event))
     {
       rtn = 1;
 
@@ -696,7 +696,7 @@ void WsHttpResponseSend(ref(WsHttpResponse) ctx)
     vector_push_back(_(connection).outgoing, vector_at(_(ctx).data, ci));
   }
 
-  _WsPollSend(connection);
+  _WsConnectionPollSend(connection);
 }
 
 ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) ctx)

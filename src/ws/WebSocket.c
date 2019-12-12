@@ -168,26 +168,46 @@ uint16_t f_uint16(uint8_t *value)
  * if enough bytes have been received for a complete message. If so add them
  * to the decoded buffer whilst unmasking them and return it.
  *
- * [ type            ]
- * [ length          ]
- * < extended length >
- * <                 >
- * < extended length >
- * <                 >
- * <                 >
- * <                 >
- * [ mask 1          ]
- * [ mask 2          ]
- * [ mask 3          ]
- * [ mask 4          ]
- * < data            >
+ * [ final           ] 1
+ * [ reserved1       ] 1
+ * [ reserved2       ] 1
+ * [ reserved3       ] 1
+ * [ opcode          ] 4
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * [ mask            ] 1
+ * [ payload_len     ] 7
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * < extended_len    > 16 (if payload len == 126)
+ * <                 > 64 (if payload_len == 127)
+ * [ mask 1          ] 4
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * [ mask 2          ] 4
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * [ mask 3          ] 4
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * [ mask 4          ] 4
+ * [                 ]
+ * [                 ]
+ * [                 ]
+ * < data            > payload_len or extended_len
  *
- * frame     - The current buffer containing a potentially complete frame.
- * length    - The lengh of data (to avoid strlen).
- * decodeLen - Output the contained frames length (to avoid strlen).
- * end       - Output the position of the first byte of the next message.
+ * incoming - The buffer containing all currently received data.
+ * fi       - Out variable to populate with information about the frame.
  *
- * Returns the decoded frames message.
+ * Returns 1 if the incoming data contained a valid frame.
  *
  ****************************************************************************/
 char *_WsDecodeFrame(vector(unsigned char) incoming,
