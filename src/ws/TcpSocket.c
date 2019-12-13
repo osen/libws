@@ -226,10 +226,10 @@ int WsTcpSocketsReady(vector(ref(WsTcpSocket)) reads,
 
   if(
 #ifdef USE_POSIX
-    select(mfd + 1, &readfds, &writefds, NULL, (timeout > 0 ? &tv : NULL)) == -1
+    select(mfd + 1, &readfds, &writefds, NULL, (timeout >= 0 ? &tv : NULL)) == -1
 #endif
 #ifdef USE_WINSOCK
-    select(mfd + 1, &readfds, &writefds, NULL, (timeout > 0 ? &tv : NULL)) == SOCKET_ERROR
+    select(mfd + 1, &readfds, &writefds, NULL, (timeout >= 0 ? &tv : NULL)) == SOCKET_ERROR
 #endif
   )
   {
