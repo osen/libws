@@ -50,7 +50,6 @@ struct WsHttpResponse
   vector(unsigned char) data;
 };
 
-vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request);
 unsigned char *_WsHandshakeAccept(char *wsKey);
 
 ref(WsServer) WsServerListen(int port)
@@ -226,7 +225,7 @@ int _WsConnectionProcessInitial(ref(WsServer) server, ref(WsConnection) connecti
   }
 
   event->connection = connection;
-  response = _WsHandshakeResponse(_(connection).incoming);
+  response = _WsHandshakeResponse(header);
 
   if(response)
   {
@@ -238,10 +237,7 @@ int _WsConnectionProcessInitial(ref(WsServer) server, ref(WsConnection) connecti
 
     _WsConnectionPollSend(connection);
     vector_delete(response);
-/*
-    vector_erase(_(connection).incoming, 0, nextStart);
-    vector_clear(_(connection).incoming);
-*/
+
     event->type = WS_CONNECT;
   }
   else

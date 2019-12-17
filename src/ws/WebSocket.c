@@ -1,6 +1,7 @@
 #include "sha1.h"
 #include "base64.h"
 #include "WebSocket.h"
+#include "HttpHeader.h"
 
 #include "stent.h"
 
@@ -45,92 +46,29 @@ unsigned char *_WsHandshakeAccept(char *wsKey)
   return rtn;
 }
 
-vector(unsigned char) _WsHandshakeResponse(vector(unsigned char) request)
+vector(unsigned char) _WsHandshakeResponse(ref(HttpHeader) header)
 {
-  char *s = NULL;
   unsigned char *accept = NULL;
   vector(unsigned char) rtn = NULL;
-  char *req = NULL;
-  size_t di = 0;
-  int marker = -1;
+  ref(sstream) key = NULL;
 
-  /*
-   * Incoming stream not large enough to contain 4 byte header separator
-   * consisting of "\r\n\r\n". Early out.
-   */
-  if(vector_size(request) < 4)
+  if(!HttpHeaderContains(header, "Sec-WebSocket-Key"))
   {
     return NULL;
   }
 
-  /*
-   * Find the header separator (\r\n\r\n) and store the position of the
-   * start of subsequent content.
-   */
-  for(di = 0; di < vector_size(request) - 3; di++)
-  {
-    if(vector_at(request, di) == '\r' &&
-      vector_at(request, di + 1) == '\n' &&
-      vector_at(request, di + 2) == '\r' &&
-      vector_at(request, di + 3) == '\n')
-    {
-      marker = di;
+  key = HttpHeaderGetCStr(header, "Sec-WebSocket-Key");
+  printf("Key: [%i][%s]\n", (int)sstream_length(key), sstream_cstr(key));
 
-      break;
-    }
-  }
-
-  /*
-   * The header separator was not found. Early exit.
-   */
-  if(marker == -1)
-  {
-    return NULL;
-  }
-
-  req = &vector_at(request, 0);
-
-  for(s = strtok(req, "\r\n"); s != NULL; s = strtok(NULL, "\r\n"))
-  {
-    if(strstr(s, WS_HS_REQ) != NULL)
-    {
-      break;
-    }
-  }
-
-  s = strtok(s,    " ");
-  s = strtok(NULL, " ");
-
-  if(!s)
-  {
-    return NULL;
-  }
-	
-  accept = _WsHandshakeAccept(s);
+  accept = _WsHandshakeAccept(sstream_cstr(key));
 
   rtn = vector_new(unsigned char);
   vector_resize(rtn, WS_HS_ACCLEN);
-  //rtn = malloc(sizeof(char) * WS_HS_ACCLEN);
   strcpy(&vector_at(rtn, 0), WS_HS_ACCEPT);
   strcat(&vector_at(rtn, 0), (const char *)accept);
   strcat(&vector_at(rtn, 0), "\r\n\r\n");
 
   free(accept);
-
-  vector_erase(request, 0, marker + 4);
-
-/*
-  {
-    size_t ci = 0;
-
-    for(ci = 0; ci < vector_size(request); ci++)
-    {
-      printf("%c", vector_at(request, ci));
-    }
-
-    printf("\n");
-  }
-*/
 
   return rtn;
 }

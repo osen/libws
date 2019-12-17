@@ -4,6 +4,8 @@
 #define WS_FRAME_TEXT 2
 #define WS_FRAME_UNKNOWN 3
 
+struct HttpHeader;
+
 struct WsFrameInfo
 {
   int masked;
@@ -15,3 +17,5 @@ struct WsFrameInfo
 
 char *_WsDecodeFrame(vector(unsigned char) incoming,
   struct WsFrameInfo *fi);
+
+vector(unsigned char) _WsHandshakeResponse(ref(HttpHeader) header);
