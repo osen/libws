@@ -58,7 +58,10 @@ vector(unsigned char) _WsHandshakeResponse(ref(HttpHeader) header)
   }
 
   key = HttpHeaderGetCStr(header, "Sec-WebSocket-Key");
+
+/*
   printf("Key: [%i][%s]\n", (int)sstream_length(key), sstream_cstr(key));
+*/
 
   accept = _WsHandshakeAccept(sstream_cstr(key));
 

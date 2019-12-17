@@ -466,7 +466,7 @@ int _WsConnectionPoll(ref(WsServer) server, ref(WsConnection) connection,
 int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 {
   size_t begin = 0;
-  size_t end = 0;
+  size_t incs = 0;
   ref(WsConnection) conn = NULL;
   size_t ci = 0;
   int rtn = 0;
@@ -480,9 +480,9 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
   }
 
   begin = _(server).nextToPoll;
-  end = begin + 1;
+  ci = begin;
 
-  for(ci = begin; ci != end; ci++)
+  while(1)
   {
     /*
      * If the end of the vector has been reached, start from beginning again
@@ -493,6 +493,12 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
       ci = 0;
     }
 
+    if(ci == begin && incs > 0)
+    {
+      break;
+    }
+
+    incs++;
     conn = vector_at(_(server).connections, ci);
 
     if(_WsConnectionPoll(server, conn, event))
@@ -501,6 +507,8 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 
       break;
     }
+
+    ci++;
   }
 
   for(ci = 0; ci < vector_size(_(server).connections); ci++)
