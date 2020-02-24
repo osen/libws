@@ -47,7 +47,7 @@ ref(sstream) load_file(char *path)
 
   if(!file)
   {
-    abort();
+    panic("Failed to open file");
   }
 
   rtn = sstream_new();
@@ -87,9 +87,9 @@ int main()
       {
         printf("Unhandled Event: %i\n", event.type);
       }
-
-      printf("Tick\n");
     }
+
+    printf("Tick\n");
   }
 
   WsServerClose(server);

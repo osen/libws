@@ -339,6 +339,12 @@ void ifstream_close(ref(ifstream) ctx);
 int ifstream_eof(ref(ifstream) ctx);
 void ifstream_getline(ref(ifstream) ctx, ref(sstream) out);
 
+/***************************************************
+ * Error Handling
+ ***************************************************/
+
+void panic(char *message);
+
 #endif
 
 #ifdef STENT_IMPLEMENTATION
@@ -1055,6 +1061,13 @@ void ifstream_getline(ref(ifstream) ctx, ref(sstream) out)
       ci++;
     }
   }
+}
+
+void panic(char *message)
+{
+  printf("Panic: %s\n", message);
+
+  abort();
 }
 
 #endif

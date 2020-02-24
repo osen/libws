@@ -22,8 +22,6 @@ struct WsHttpRequest;
 
 struct WsMessageEvent
 {
-  char _data[1024];
-  size_t length;
   vector(unsigned char) data;
 };
 

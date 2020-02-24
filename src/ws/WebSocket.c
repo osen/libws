@@ -147,14 +147,14 @@ uint16_t f_uint16(uint8_t *value)
  *
  * incoming - The buffer containing all currently received data.
  * fi       - Out variable to populate with information about the frame.
+ * data     - Decoded message
  *
  * Returns 1 if the incoming data contained a valid frame.
  *
  ****************************************************************************/
-char *_WsDecodeFrame(vector(unsigned char) incoming,
-  struct WsFrameInfo *fi)
+int _WsDecodeFrame(vector(unsigned char) incoming,
+  struct WsFrameInfo *fi, vector(unsigned char) data)
 {
-  char *msg = NULL;       /* Decoded message         */
   uint8_t maskStart;      /* Index where mask starts */
   size_t payloadLength;   /* Data length             */
   uint8_t masks[4];       /* Masking key             */
@@ -169,7 +169,7 @@ char *_WsDecodeFrame(vector(unsigned char) incoming,
    */
   if(vector_size(incoming) < 2)
   {
-    return NULL;
+    return 0;
   }
 
   /*
@@ -214,9 +214,13 @@ char *_WsDecodeFrame(vector(unsigned char) incoming,
     fi->dataStart = maskStart + 4;
     fi->dataEnd = fi->dataStart + payloadLength;
 
+    /*
+     * Header reports longer payload than buffer. Wait for
+     * more bytes to be received.
+     */
     if(fi->dataEnd > vector_size(incoming))
     {
-      return NULL;
+      return 0;
     }
 
     masks[0] = vector_at(incoming, maskStart);
@@ -224,14 +228,12 @@ char *_WsDecodeFrame(vector(unsigned char) incoming,
     masks[2] = vector_at(incoming, maskStart + 2);
     masks[3] = vector_at(incoming, maskStart + 3);
 
-    msg = malloc(sizeof(unsigned char) * (payloadLength + 1));
+    vector_resize(data, payloadLength);
 
     for(i = fi->dataStart, j = 0; i < fi->dataEnd; i++, j++)
     {
-      msg[j] = vector_at(incoming, i) ^ masks[j % 4];
+      vector_at(data, j) = vector_at(incoming, i) ^ masks[j % 4];
     }
-
-    msg[j] = '\0';
   }
   else if((first & 8 /* 00001000 */) != 0)
   {
@@ -243,6 +245,6 @@ char *_WsDecodeFrame(vector(unsigned char) incoming,
     printf("Unknown frame opcode\n");
   }
 
-  return msg;
+  return 1;
 }
 

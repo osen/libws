@@ -284,8 +284,18 @@ int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connec
   ref(WsMessageEvent) message = NULL;
   struct WsFrameInfo fi = {0};
   ref(WsDisconnectEvent) disconnect = NULL;
+  int fr = 0;
 
-  char *msg = _WsDecodeFrame(_(connection).incoming, &fi);
+  message = _(server).message;
+  fr = _WsDecodeFrame(_(connection).incoming, &fi, _(message).data);
+
+  /*
+   * Early return with incomplete frame
+   */
+  if(!fr)
+  {
+    return 0;
+  }
 
   if(!fi.final)
   {
@@ -315,18 +325,12 @@ int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connec
 
     return 1;
   }
-
-  if(msg)
+  else if(fi.opcode == WS_FRAME_TEXT)
   {
-    size_t msgLen = strlen(msg);
-
     /*
-     * Add message event data
+     * TODO: We may want to allow empty messages so should not check for
+     * vector_size(_(message).data) > 0.
      */
-    message = _(server).message;
-    memcpy(_(message)._data, msg, msgLen);
-    free(msg);
-    _(message).length = msgLen;
 
     /*
      * Prepare base event structure
@@ -335,9 +339,16 @@ int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connec
     event->connection = connection;
     event->message = message;
 
+    /*
+     * Remove the packet data from the incoming stream
+     */
     vector_erase(_(connection).incoming, 0, fi.dataEnd);
 
     return 1;
+  }
+  else
+  {
+    printf("TODO: Unknown opcode");
   }
 
   return 0;

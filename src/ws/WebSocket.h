@@ -15,7 +15,7 @@ struct WsFrameInfo
   size_t dataEnd;
 };
 
-char *_WsDecodeFrame(vector(unsigned char) incoming,
-  struct WsFrameInfo *fi);
+int _WsDecodeFrame(vector(unsigned char) incoming,
+  struct WsFrameInfo *fi, vector(unsigned char) data);
 
 vector(unsigned char) _WsHandshakeResponse(ref(HttpHeader) header);
