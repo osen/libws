@@ -47,8 +47,6 @@ struct WsHttpResponse
   vector(unsigned char) data;
 };
 
-unsigned char *_WsHandshakeAccept(char *wsKey);
-
 ref(WsServer) WsServerListen(int port)
 {
   ref(WsServer) rtn = NULL;

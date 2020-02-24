@@ -9,9 +9,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define WS_KEY_LEN 24
-#define WS_MS_LEN 36
-#define WS_KEYMS_LEN (WS_KEY_LEN + WS_MS_LEN)
 #define MAGIC_STRING "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 #define WS_HS_REQ "Sec-WebSocket-Key"
 #define WS_HS_ACCLEN   130
@@ -22,33 +19,51 @@
 "Connection: Upgrade\r\n"              \
 "Sec-WebSocket-Accept: "
 
-unsigned char *_WsHandshakeAccept(char *wsKey)
+ref(sstream) _WsHandshakeAccept(ref(sstream) key)
 {
-  unsigned char *rtn = NULL;
-  SHA1Context ctx;
-  char *str = malloc(sizeof(char) * (WS_KEY_LEN + WS_MS_LEN + 1));
-  unsigned char hash[SHA1HashSize];
+  ref(sstream) rtn = NULL;
+  SHA1Context ctx = {0};
+  size_t len = 0;
+  size_t ti = 0;
 
-  strcpy(str, wsKey);
-  strcat(str, MAGIC_STRING);
+  /*
+   * TODO: Unsafe
+   */
+  unsigned char *tmp = NULL;
+  unsigned char hash[SHA1HashSize] = {0};
+
+  rtn = sstream_new();
+  sstream_append(rtn, key);
+  sstream_append_cstr(rtn, MAGIC_STRING);
 
   SHA1Reset(&ctx);
-  SHA1Input(&ctx, (const uint8_t *)str, WS_KEYMS_LEN);
+  SHA1Input(&ctx, (const uint8_t *)sstream_cstr(rtn), sstream_length(rtn));
   SHA1Result(&ctx, hash);
 
-  rtn = base64_encode(hash, SHA1HashSize, NULL);
+  tmp = base64_encode(hash, SHA1HashSize, &len);
+  sstream_str_cstr(rtn, "");
 
-  /* TODO: The simple version does not add a '\n' on the end. */
-  *(rtn + strlen((const char *)rtn) - 1) = '\0';
+  for(ti = 0; ti < len; ti++)
+  {
+    /*
+     * Ignore the new line character (which is part of the base64 standard)
+     */
+    if(tmp[ti] == '\n')
+    {
+      break;
+    }
 
-  free(str);
+    sstream_append_char(rtn, tmp[ti]);
+  }
+
+  free(tmp);
 
   return rtn;
 }
 
 vector(unsigned char) _WsHandshakeResponse(ref(HttpHeader) header)
 {
-  unsigned char *accept = NULL;
+  ref(sstream) accept = NULL;
   vector(unsigned char) rtn = NULL;
   ref(sstream) key = NULL;
 
@@ -63,15 +78,15 @@ vector(unsigned char) _WsHandshakeResponse(ref(HttpHeader) header)
   printf("Key: [%i][%s]\n", (int)sstream_length(key), sstream_cstr(key));
 */
 
-  accept = _WsHandshakeAccept(sstream_cstr(key));
+  accept = _WsHandshakeAccept(key);
 
   rtn = vector_new(unsigned char);
   vector_resize(rtn, WS_HS_ACCLEN);
   strcpy(&vector_at(rtn, 0), WS_HS_ACCEPT);
-  strcat(&vector_at(rtn, 0), (const char *)accept);
+  strcat(&vector_at(rtn, 0), sstream_cstr(accept));
   strcat(&vector_at(rtn, 0), "\r\n\r\n");
 
-  free(accept);
+  sstream_delete(accept);
 
   return rtn;
 }
