@@ -21,10 +21,7 @@ struct WsServer
   ref(WsTcpSocket) socket;
   vector(ref(WsConnection)) connections;
   size_t nextToPoll;
-
-  ref(WsHttpEvent) http;
-  ref(WsMessageEvent) message;
-  ref(WsDisconnectEvent) disconnect;
+  struct WsEvent events;
 };
 
 struct WsConnection
@@ -61,15 +58,15 @@ ref(WsServer) WsServerListen(int port)
   /*
    * Allocate the event structures
    */
-  _(rtn).disconnect = allocate(WsDisconnectEvent);
-  _(rtn).message = allocate(WsMessageEvent);
-  _(_(rtn).message).data = vector_new(unsigned char);
+  _(rtn).events.disconnect = allocate(WsDisconnectEvent);
+  _(rtn).events.message = allocate(WsMessageEvent);
+  _(_(rtn).events.message).data = vector_new(unsigned char);
 
-  _(rtn).http = allocate(WsHttpEvent);
-  _(_(rtn).http).request = allocate(WsHttpRequest);
-  _(_(_(rtn).http).request).path = sstream_new();
-  _(_(rtn).http).response = allocate(WsHttpResponse);
-  _(_(_(rtn).http).response).data = vector_new(unsigned char);
+  _(rtn).events.http = allocate(WsHttpEvent);
+  _(_(rtn).events.http).request = allocate(WsHttpRequest);
+  _(_(_(rtn).events.http).request).path = sstream_new();
+  _(_(rtn).events.http).response = allocate(WsHttpResponse);
+  _(_(_(rtn).events.http).response).data = vector_new(unsigned char);
 
   _(rtn).connections = vector_new(ref(WsConnection));
   _(rtn).socket = WsTcpListen(port);
@@ -243,7 +240,7 @@ int _WsConnectionProcessInitial(ref(WsServer) server, ref(WsConnection) connecti
   else
   {
     event->type = WS_HTTP_REQUEST;
-    event->http = _(server).http;
+    event->http = _(server).events.http;
 
     _(_(event->http).response).connection = connection;
     _(_(event->http).response).headersSent = 0;
@@ -286,7 +283,7 @@ int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connec
   ref(WsDisconnectEvent) disconnect = NULL;
   int fr = 0;
 
-  message = _(server).message;
+  message = _(server).events.message;
   fr = _WsDecodeFrame(_(connection).incoming, &fi, _(message).data);
 
   /*
@@ -312,7 +309,7 @@ int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connec
     /*
      * Add disconnect event data
      */
-    disconnect = _(server).disconnect;
+    disconnect = _(server).events.disconnect;
     _(disconnect).reason = WS_CLOSED;
 
     /*
@@ -396,7 +393,7 @@ int _WsConnectionPoll(ref(WsServer) server, ref(WsConnection) connection,
     /*
      * Add disconnect event data
      */
-    disconnect = _(server).disconnect;
+    disconnect = _(server).events.disconnect;
     _(disconnect).reason = WS_CLOSED;
 
     /*
@@ -620,14 +617,14 @@ void WsServerClose(ref(WsServer) server)
 {
   size_t ci = 0;
 
-  release(_(server).disconnect);
-  vector_delete(_(_(server).message).data);
-  release(_(server).message);
-  vector_delete(_(_(_(server).http).response).data);
-  release(_(_(server).http).response);
-  sstream_delete(_(_(_(server).http).request).path);
-  release(_(_(server).http).request);
-  release(_(server).http);
+  release(_(server).events.disconnect);
+  vector_delete(_(_(server).events.message).data);
+  release(_(server).events.message);
+  vector_delete(_(_(_(server).events.http).response).data);
+  release(_(_(server).events.http).response);
+  sstream_delete(_(_(_(server).events.http).request).path);
+  release(_(_(server).events.http).request);
+  release(_(server).events.http);
 
   for(ci = 0; ci < vector_size(_(server).connections); ci++)
   {

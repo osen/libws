@@ -322,6 +322,7 @@ void sstream_append_cstr(ref(sstream) ctx, char *str);
 void sstream_append_int(ref(sstream) ctx, int val);
 
 void sstream_split(ref(sstream) ctx, unsigned char c, vector(ref(sstream)) out);
+void sstream_split_eol(ref(sstream) ctx, vector(ref(sstream)) out);
 char *sstream_cstr(ref(sstream) ctx);
 unsigned char sstream_at(ref(sstream) ctx, size_t idx);
 size_t sstream_length(ref(sstream) ctx);
@@ -932,6 +933,102 @@ void sstream_split(ref(sstream) ctx, unsigned char c, vector(ref(sstream)) out)
   if(curr != NULL)
   {
     vector_push_back(out, curr);
+  }
+}
+
+void sstream_split_eol(ref(sstream) ctx, vector(ref(sstream)) out)
+{
+  size_t max = 0;
+  size_t i = 0;
+  ref(sstream) curr = NULL;
+  char ch = 0;
+
+  /*
+   * If out array already larger than 0, use that existing string
+   * after blanking it.
+   */
+  if(max >= vector_size(out))
+  {
+    curr = sstream_new();
+  }
+  else
+  {
+    curr = vector_at(out, max);
+    sstream_str_cstr(curr, "");
+  }
+
+  for(i = 0; i < sstream_length(ctx); i++)
+  {
+    ch = sstream_at(ctx, i);
+
+    if(ch == '\n')
+    {
+      /*
+       * Add to out array if not an empty token
+       */
+      if(sstream_length(curr) > 0)
+      {
+        /*
+         * String is already in array if max is still smaller than array
+         */
+        if(max >= vector_size(out))
+        {
+          vector_push_back(out, curr);
+        }
+        max++;
+
+        /*
+         * If out array already larger than max, use that existing string
+         * after blanking it.
+         */
+        if(max >= vector_size(out))
+        {
+          curr = sstream_new();
+        }
+        else
+        {
+          curr = vector_at(out, max);
+          sstream_str_cstr(curr, "");
+        }
+      }
+    }
+    else if(ch == '\r')
+    {
+      /* Ignore */
+    }
+    else
+    {
+      sstream_append_char(curr, ch);
+    }
+  }
+
+  /*
+   * If remaining curr is not blank. Add it to out array
+   * if not already reusing an element.
+   */
+  if(sstream_length(curr) > 0)
+  {
+    if(max >= vector_size(out))
+    {
+      vector_push_back(out, curr);
+    }
+    max++;
+  }
+  else
+  {
+    if(max >= vector_size(out))
+    {
+      sstream_delete(curr);
+    }
+  }
+
+  /*
+   * Erase the remaining elements. They are not needed.
+   */
+  while(vector_size(out) > max)
+  {
+    sstream_delete(vector_at(out, vector_size(out) - 1));
+    vector_erase(out, vector_size(out) - 1, 1);
   }
 }
 

@@ -72,8 +72,18 @@ ref(HttpHeader) HttpHeaderCreate(vector(unsigned char) data)
   }
 
   hls = vector_new(ref(sstream));
-  sstream_split(ss, '\n', hls);
+  sstream_split_eol(ss, hls);
   sstream_delete(ss);
+
+  /*
+   * Early return if header does not contain at least one line
+   */
+  if(vector_size(hls) < 1)
+  {
+    vector_delete(hls);
+
+    return NULL;
+  }
 
   /*
    * First request line is the url. Remove from list, process, store as path.
@@ -109,14 +119,6 @@ ref(HttpHeader) HttpHeaderCreate(vector(unsigned char) data)
   for(hi = 0; hi < vector_size(hls); hi++)
   {
     ss = vector_at(hls, hi);
-
-    /*
-     * Remove carriage return character '\r'.
-     */
-    if(sstream_at(ss, sstream_length(ss) - 1) == '\r')
-    {
-      sstream_erase(ss, sstream_length(ss) - 1, 1);
-    }
 
     key = allocate(Key);
     _(key).name = sstream_new();
