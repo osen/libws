@@ -20,21 +20,9 @@ struct WsConnection;
 struct WsHttpResponse;
 struct WsHttpRequest;
 
-struct WsMessageEvent
-{
-  vector(unsigned char) data;
-};
-
-struct WsDisconnectEvent
-{
-  int reason;
-};
-
-struct WsHttpEvent
-{
-  ref(WsHttpRequest) request;
-  ref(WsHttpResponse) response;
-};
+struct WsMessageEvent;
+struct WsDisconnectEvent;
+struct WsHttpEvent;
 
 struct WsEvent
 {
@@ -57,5 +45,8 @@ void WsHttpResponseSetStatusCode(ref(WsHttpResponse) ctx, int status);
 void WsHttpResponseWriteCStr(ref(WsHttpResponse) ctx, char *data);
 void WsHttpResponseSend(ref(WsHttpResponse) ctx);
 ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) ctx);
+
+ref(sstream) WsMessageEventMessage(ref(WsMessageEvent) ctx);
+vector(unsigned char) WsMessageEventData(ref(WsMessageEvent) ctx);
 
 #endif

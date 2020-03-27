@@ -2,6 +2,7 @@
 #include "TcpSocket.h"
 #include "HttpHeader.h"
 #include "WebSocket.h"
+#include "Event.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +60,7 @@ ref(WsServer) WsServerListen(int port)
   _(rtn).events.disconnect = allocate(WsDisconnectEvent);
   _(rtn).events.message = allocate(WsMessageEvent);
   _(_(rtn).events.message).data = vector_new(unsigned char);
+  _(_(rtn).events.message).message = sstream_new();
 
   _(rtn).events.http = allocate(WsHttpEvent);
   _(_(rtn).events.http).request = allocate(WsHttpRequest);
@@ -333,6 +335,8 @@ int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connec
     event->type = WS_MESSAGE;
     event->connection = connection;
     event->message = message;
+
+    sstream_str_cstr(_(message).message, "");
 
     /*
      * Remove the packet data from the incoming stream
@@ -617,6 +621,7 @@ void WsServerClose(ref(WsServer) server)
 
   release(_(server).events.disconnect);
   vector_delete(_(_(server).events.message).data);
+  sstream_delete(_(_(server).events.message).message);
   release(_(server).events.message);
   vector_delete(_(_(_(server).events.http).response).data);
   release(_(_(server).events.http).response);
@@ -712,4 +717,24 @@ void WsHttpResponseSend(ref(WsHttpResponse) ctx)
 ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) ctx)
 {
   return _(ctx).path;
+}
+
+ref(sstream) WsMessageEventMessage(ref(WsMessageEvent) ctx)
+{
+  size_t di = 0;
+
+  if(sstream_length(_(ctx).message) != vector_size(_(ctx).data))
+  {
+    for(di = 0; di < vector_size(_(ctx).data); di++)
+    {
+      sstream_append_char(_(ctx).message, vector_at(_(ctx).data, di));
+    }
+  }
+
+  return _(ctx).message;
+}
+
+vector(unsigned char) WsMessageEventData(ref(WsMessageEvent) ctx)
+{
+  return _(ctx).data;
 }

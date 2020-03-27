@@ -2,17 +2,20 @@
 
 #include <stdio.h>
 
-ref(sstream) echoHtml;
+ref(sstream) load_file(ref(sstream) path);
+
 int running;
+
+void handle_message(ref(WsMessageEvent) message)
+{
+  printf("Websocket message [%s]\n", sstream_cstr(WsMessageEventMessage(message)));
+}
 
 void handle_http(ref(WsHttpEvent) http)
 {
   ref(WsHttpRequest) request = NULL;
   ref(WsHttpResponse) response = NULL;
-  ref(sstream) path = NULL;
-  ref(ifstream) file = NULL;
   ref(sstream) content = NULL;
-  ref(sstream) line = NULL;
 
   request = WsHttpEventRequest(http);
   response = WsHttpEventResponse(http);
@@ -24,35 +27,14 @@ void handle_http(ref(WsHttpEvent) http)
   }
   else if(strcmp(sstream_cstr(WsHttpRequestPath(request)), "/hello") == 0)
   {
-    WsHttpResponseWriteCStr(response, "Hello World");
-  }
-  else if(strcmp(sstream_cstr(WsHttpRequestPath(request)), "/echo") == 0)
-  {
-    WsHttpResponseWriteCStr(response, sstream_cstr(echoHtml));
+    WsHttpResponseWriteCStr(response, "<h1>Hello World</h1><hr><i>raptor httpd</i>");
   }
   else
   {
-    path = sstream_new();
-    sstream_str_cstr(path, "www");
-    sstream_append(path, WsHttpRequestPath(request));
+    content = load_file(WsHttpRequestPath(request));
 
-    file = ifstream_open(path);
-    sstream_delete(path);
-
-    if(file)
+    if(content)
     {
-      content = sstream_new();
-      line = sstream_new();
-
-      while(!ifstream_eof(file))
-      {
-        ifstream_getline(file, line);
-        sstream_append(content, line);
-        sstream_append_char(content, '\n');
-      }
-
-      ifstream_close(file);
-      sstream_delete(line);
       WsHttpResponseWriteCStr(response, sstream_cstr(content));
       sstream_delete(content);
     }
@@ -66,17 +48,23 @@ void handle_http(ref(WsHttpEvent) http)
   WsHttpResponseSend(response);
 }
 
-ref(sstream) load_file(char *path)
+ref(sstream) load_file(ref(sstream) path)
 {
-  ref(sstream) rtn = NULL;
+  ref(sstream) lp = NULL;
   ref(ifstream) file = NULL;
+  ref(sstream) rtn = NULL;
   ref(sstream) line = NULL;
 
-  file = ifstream_open_cstr(path);
+  lp = sstream_new();
+  sstream_str_cstr(lp, "www");
+  sstream_append(lp, path);
+
+  file = ifstream_open(lp);
+  sstream_delete(lp);
 
   if(!file)
   {
-    panic("Failed to open file");
+    return NULL;
   }
 
   rtn = sstream_new();
@@ -100,7 +88,6 @@ int main()
   ref(WsServer) server = NULL;
   struct WsEvent event = {0};
 
-  echoHtml = load_file("www/echo.html");
   server = WsServerListen(1987);
   running = 1;
 
@@ -111,6 +98,10 @@ int main()
       if(event.type == WS_HTTP_REQUEST)
       {
         handle_http(event.http);
+      }
+      else if(event.type == WS_MESSAGE)
+      {
+        handle_message(event.message);
       }
       else
       {
@@ -124,7 +115,6 @@ int main()
   }
 
   WsServerClose(server);
-  sstream_delete(echoHtml);
 
   return 0;
 }
