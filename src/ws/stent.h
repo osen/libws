@@ -62,11 +62,11 @@
   ((_assert_ref(R))[0][0])
 
 #define _assert_ref(R) \
-  ((1 || \
+  ((_svalid((refvoid)R, __FILE__, __LINE__) || \
     memcmp(&R, &R, 0) || \
     memcmp(&R[0], &R[0], 0) || \
     memcpy(&R[0][0], &R[0][0], 0) || \
-    _svalid((refvoid)R, __FILE__, __LINE__)) ? R : NULL)
+    1) ? R : NULL)
 
 /*****************************************************************************
  * allocate(T)
@@ -125,12 +125,12 @@ int _svalid(refvoid ptr, const char *file, size_t line);
   T ***
 
 #define _assert_vector(V) \
-  ((1 || \
+  ((_svalid((refvoid)V, __FILE__, __LINE__) || \
     memcmp(&V, &V, 0) || \
     memcmp(&V[0], &V[0], 0) || \
     memcpy(&V[0][0], &V[0][0], 0) || \
     memcpy(&V[0][0][0], &V[0][0][0], 0) || \
-    _svalid((refvoid)V, __FILE__, __LINE__)) ? V : NULL)
+    1) ? V : NULL)
 
 #define vector_new(T) \
   (vector(T))_vector_new(sizeof(T), "vector("#T")")
