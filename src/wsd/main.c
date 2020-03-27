@@ -54,10 +54,30 @@ ref(sstream) load_file(ref(sstream) path)
   ref(ifstream) file = NULL;
   ref(sstream) rtn = NULL;
   ref(sstream) line = NULL;
+  ref(dir) dp = NULL;
 
   lp = sstream_new();
   sstream_str_cstr(lp, "www");
   sstream_append(lp, path);
+
+  if(sstream_length(lp) < 1)
+  {
+    sstream_append_char(lp, '/');
+  }
+
+  dp = dir_open(lp);
+
+  if(dp)
+  {
+    dir_close(dp);
+
+    if(sstream_at(lp, sstream_length(lp) - 1) != '/')
+    {
+      sstream_append_char(lp, '/');
+    }
+
+    sstream_append_cstr(lp, "index.html");
+  }
 
   file = ifstream_open(lp);
   sstream_delete(lp);

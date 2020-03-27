@@ -10,6 +10,8 @@
 #ifndef STENT_STENT_H
 #define STENT_STENT_H
 
+#include <dirent.h>
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -293,6 +295,16 @@ ref(ifstream) ifstream_open(ref(sstream) path);
 void ifstream_close(ref(ifstream) ctx);
 int ifstream_eof(ref(ifstream) ctx);
 void ifstream_getline(ref(ifstream) ctx, ref(sstream) out);
+
+/***************************************************
+ * Directory Handling
+ ***************************************************/
+
+struct dir;
+
+ref(dir) dir_open_cstr(char *path);
+ref(dir) dir_open(ref(sstream) path);
+void dir_close(ref(dir) ctx);
 
 /***************************************************
  * Error Handling
@@ -1015,6 +1027,44 @@ void sstream_str(ref(sstream) ctx, ref(sstream) str)
   vector_clear(_(ctx).data);
   vector_push_back(_(ctx).data, '\0');
   sstream_append(ctx, str);
+}
+
+/***************************************************
+ * Directory Handling
+ ***************************************************/
+
+struct dir
+{
+  DIR *dp;
+};
+
+ref(dir) dir_open_cstr(char *path)
+{
+  ref(dir) rtn = NULL;
+  DIR *dp = NULL;
+
+  dp = opendir(path);
+
+  if(!dp)
+  {
+    return NULL;
+  }
+
+  rtn = allocate(dir);
+  _(rtn).dp = dp;
+
+  return rtn;
+}
+
+ref(dir) dir_open(ref(sstream) path)
+{
+  return dir_open_cstr(sstream_cstr(path));
+}
+
+void dir_close(ref(dir) ctx)
+{
+  closedir(_(ctx).dp);
+  release(ctx);
 }
 
 /***************************************************
