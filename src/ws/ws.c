@@ -649,7 +649,7 @@ void WsHttpResponseSetStatusCode(ref(WsHttpResponse) ctx, int status)
   _(ctx).status = status;
 }
 
-void WsHttpResponseWrite(ref(WsHttpResponse) ctx, char *data)
+void WsHttpResponseWriteCStr(ref(WsHttpResponse) ctx, char *data)
 {
   size_t di = 0;
   size_t len = 0;

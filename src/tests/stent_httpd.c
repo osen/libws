@@ -16,7 +16,7 @@ int main()
       if(event.type == WS_HTTP_REQUEST)
       {
         response = WsHttpEventResponse(event.http);
-        WsHttpResponseWrite(response, "<h1>It Works!</h1>");
+        WsHttpResponseWriteCStr(response, "<h1>It Works!</h1>");
         WsHttpResponseSend(response);
         count++;
       }

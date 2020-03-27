@@ -54,7 +54,7 @@ ref(WsHttpRequest) WsHttpEventRequest(ref(WsHttpEvent) ctx);
 ref(WsHttpResponse) WsHttpEventResponse(ref(WsHttpEvent) ctx);
 
 void WsHttpResponseSetStatusCode(ref(WsHttpResponse) ctx, int status);
-void WsHttpResponseWrite(ref(WsHttpResponse) ctx, char *data);
+void WsHttpResponseWriteCStr(ref(WsHttpResponse) ctx, char *data);
 void WsHttpResponseSend(ref(WsHttpResponse) ctx);
 ref(sstream) WsHttpRequestPath(ref(WsHttpRequest) ctx);
 

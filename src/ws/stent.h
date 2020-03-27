@@ -62,10 +62,11 @@
   ((_assert_ref(R))[0][0])
 
 #define _assert_ref(R) \
-  ((memcmp(&R, &R, 0) || \
+  ((1 || \
+    memcmp(&R, &R, 0) || \
     memcmp(&R[0], &R[0], 0) || \
     memcpy(&R[0][0], &R[0][0], 0) || \
-    _svalid((refvoid)R, __FILE__, __LINE__)) ? R : R)
+    _svalid((refvoid)R, __FILE__, __LINE__)) ? R : NULL)
 
 /*****************************************************************************
  * allocate(T)
@@ -124,11 +125,12 @@ int _svalid(refvoid ptr, const char *file, size_t line);
   T ***
 
 #define _assert_vector(V) \
-  ((memcmp(&V, &V, 0) || \
+  ((1 || \
+    memcmp(&V, &V, 0) || \
     memcmp(&V[0], &V[0], 0) || \
     memcpy(&V[0][0], &V[0][0], 0) || \
     memcpy(&V[0][0][0], &V[0][0][0], 0) || \
-    _svalid((refvoid)V, __FILE__, __LINE__)) ? V : V)
+    _svalid((refvoid)V, __FILE__, __LINE__)) ? V : NULL)
 
 #define vector_new(T) \
   (vector(T))_vector_new(sizeof(T), "vector("#T")")
@@ -287,6 +289,7 @@ void sstream_clear(ref(sstream) ctx);
 struct ifstream;
 
 ref(ifstream) ifstream_open_cstr(char *path);
+ref(ifstream) ifstream_open(ref(sstream) path);
 void ifstream_close(ref(ifstream) ctx);
 int ifstream_eof(ref(ifstream) ctx);
 void ifstream_getline(ref(ifstream) ctx, ref(sstream) out);
@@ -1039,6 +1042,11 @@ ref(ifstream) ifstream_open_cstr(char *path)
   _(rtn).fp = fp;
 
   return rtn;
+}
+
+ref(ifstream) ifstream_open(ref(sstream) path)
+{
+  return ifstream_open_cstr(sstream_cstr(path));
 }
 
 void ifstream_close(ref(ifstream) ctx)

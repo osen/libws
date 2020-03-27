@@ -1,7 +1,5 @@
 #include <ws/ws.h>
 
-#include <unistd.h>
-
 #include <stdio.h>
 
 ref(sstream) echoHtml;
@@ -11,6 +9,10 @@ void handle_http(ref(WsHttpEvent) http)
 {
   ref(WsHttpRequest) request = NULL;
   ref(WsHttpResponse) response = NULL;
+  ref(sstream) path = NULL;
+  ref(ifstream) file = NULL;
+  ref(sstream) content = NULL;
+  ref(sstream) line = NULL;
 
   request = WsHttpEventRequest(http);
   response = WsHttpEventResponse(http);
@@ -22,16 +24,43 @@ void handle_http(ref(WsHttpEvent) http)
   }
   else if(strcmp(sstream_cstr(WsHttpRequestPath(request)), "/hello") == 0)
   {
-    WsHttpResponseWrite(response, "Hello World");
+    WsHttpResponseWriteCStr(response, "Hello World");
   }
   else if(strcmp(sstream_cstr(WsHttpRequestPath(request)), "/echo") == 0)
   {
-    WsHttpResponseWrite(response, sstream_cstr(echoHtml));
+    WsHttpResponseWriteCStr(response, sstream_cstr(echoHtml));
   }
   else
   {
-    WsHttpResponseSetStatusCode(response, 404);
-    WsHttpResponseWrite(response, "<h1>404 Not Found</h1><hr><i>raptor httpd</i>");
+    path = sstream_new();
+    sstream_str_cstr(path, "www");
+    sstream_append(path, WsHttpRequestPath(request));
+
+    file = ifstream_open(path);
+    sstream_delete(path);
+
+    if(file)
+    {
+      content = sstream_new();
+      line = sstream_new();
+
+      while(!ifstream_eof(file))
+      {
+        ifstream_getline(file, line);
+        sstream_append(content, line);
+        sstream_append_char(content, '\n');
+      }
+
+      ifstream_close(file);
+      sstream_delete(line);
+      WsHttpResponseWriteCStr(response, sstream_cstr(content));
+      sstream_delete(content);
+    }
+    else
+    {
+      WsHttpResponseSetStatusCode(response, 404);
+      WsHttpResponseWriteCStr(response, "<h1>404 Not Found</h1><hr><i>raptor httpd</i>");
+    }
   }
 
   WsHttpResponseSend(response);
@@ -89,7 +118,9 @@ int main()
       }
     }
 
+/*
     printf("Tick\n");
+*/
   }
 
   WsServerClose(server);

@@ -338,7 +338,11 @@ void WsTcpSocketSend(ref(WsTcpSocket) ctx,
   }
 
   bytes = send(_(ctx).fd, &vector_at(data, 0), vector_size(data), MSG_NOSIGNAL);
-  vector_erase(data, 0, bytes);
+
+  if(bytes > 0)
+  {
+    vector_erase(data, 0, bytes);
+  }
 }
 
 void WsTcpSocketRecv(ref(WsTcpSocket) ctx,
