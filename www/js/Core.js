@@ -2,9 +2,11 @@ function Core()
 {
   var self = {};
 
+  self.window = Window();
+
   self.start = function()
   {
-    alert("Started");
+    //alert("Started");
   };
 
   return self;
