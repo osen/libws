@@ -3,7 +3,8 @@ function Core()
   var self = {};
 
   self.components = [];
-  self.window = Window();
+  self.window = Window(self);
+  self.resources = Resources(self);
 
   self.start = function()
   {
@@ -33,7 +34,7 @@ function Core()
   {
     var gl = self.getGl();
 
-    gl.clearColor(1.0, 0.0, 0.0, 1.0);
+    gl.clearColor(0.5, 0.5, 0.5, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     for(var i = 0; i < self.components.length; i++)
@@ -59,6 +60,11 @@ function Core()
   self.getWindow = function()
   {
     return self.window;
+  };
+
+  self.getResources = function()
+  {
+    return self.resources;
   };
 
   self.getGl = function()

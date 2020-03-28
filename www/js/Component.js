@@ -26,5 +26,20 @@ function Component()
     if(self.onDisplay) self.onDisplay();
   };
 
+  self.getCore = function()
+  {
+    return self.core;
+  };
+
+  self.getResources = function()
+  {
+    return self.getCore().getResources();
+  };
+
+  self.getWindow = function()
+  {
+    return self.getCore().getWindow();
+  };
+
   return self;
 }

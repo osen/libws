@@ -1,6 +1,7 @@
-function Window()
+function Window(core)
 {
   var self = {};
+  self.core = core;
 
   // The documentElement is the "html" css node.
   document.documentElement.style.width = "100%";
