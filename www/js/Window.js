@@ -16,5 +16,17 @@ function Window()
   self.canvas.style.background = "orange";
   self.canvas.style.flexGrow = 1;
 
+  self.gl = self.canvas.getContext("webgl");
+
+  if(!self.gl)
+  {
+    throw "Failed to get WebGL context";
+  }
+
+  self.getGl = function()
+  {
+    return self.gl;
+  };
+
   return self;
 }

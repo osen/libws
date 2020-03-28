@@ -1,11 +1,17 @@
 function main()
 {
-  var core = Core();
+  try
+  {
+    var core = Core();
 
-  core.start();
+    core.addComponent(TriangleRenderer);
+
+    core.start();
+  }
+  catch(err)
+  {
+    alert("Unhandled Exception: " + err);
+  }
 }
 
-window.addEventListener("load", function()
-{
-  main();
-});
+window.addEventListener("load", main);
