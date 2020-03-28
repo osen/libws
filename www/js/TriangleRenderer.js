@@ -4,14 +4,20 @@ function TriangleRenderer()
 
   self.mesh = null;
   self.shader = null;
+  self.texture = null;
 
-  self.onDisplay = function()
+  self.onInitialize = function()
   {
     var r = self.getResources();
 
-    if(!self.mesh) self.mesh = r.loadDefaultMesh();
-    if(!self.shader) self.shader = r.loadDefaultShader();
-    if(!self.shader || !self.mesh) return;
+    self.mesh = r.loadDefaultModel();
+    self.shader = r.loadDefaultShader();
+    self.texture = r.loadDefaultTexture();
+  }
+
+  self.onDisplay = function()
+  {
+
   };
 
   return self;
