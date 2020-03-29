@@ -114,6 +114,18 @@ void _WsConnectionPollSend(ref(WsConnection) connection)
     return;
   }
 
+/*
+  {
+    size_t pi = 0;
+    for(pi = 0; pi < vector_size(_(connection).outgoing); pi++)
+    {
+      printf("[%i]", (int)vector_at(_(connection).outgoing, pi));
+      //printf("[%c]", vector_at(_(connection).outgoing, pi));
+    }
+    printf("\n");
+  }
+*/
+
   WsTcpSocketSend(_(connection).socket, _(connection).outgoing);
 }
 

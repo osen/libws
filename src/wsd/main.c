@@ -123,6 +123,17 @@ int main()
       {
         handle_message(event.message);
       }
+      else if(event.type == WS_CONNECT)
+      {
+        printf("Client Connected\n");
+        vector(unsigned char) msg = vector_new(unsigned char);
+        vector_push_back(msg, 'H');
+        vector_push_back(msg, 'E');
+        vector_push_back(msg, 'L');
+        vector_push_back(msg, 'O');
+        WsSend(event.connection, msg);
+        vector_delete(msg);
+      }
       else
       {
         printf("Unhandled Event: %i\n", event.type);

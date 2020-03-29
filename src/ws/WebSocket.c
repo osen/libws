@@ -11,7 +11,8 @@
 
 #define MAGIC_STRING "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 #define WS_HS_REQ "Sec-WebSocket-Key"
-#define WS_HS_ACCLEN   130
+//#define WS_HS_ACCLEN   130
+#define WS_HS_ACCLEN   129
 
 #define WS_HS_ACCEPT                   \
 "HTTP/1.1 101 Switching Protocols\r\n" \

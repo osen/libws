@@ -6,6 +6,7 @@ function Core()
   self.window = Window(self);
   self.resources = Resources(self);
   self.camera = Camera(self);
+  self.connection = Connection(self);
 
   self.start = function()
   {
@@ -26,6 +27,7 @@ function Core()
   self.tick = function()
   {
     self.window.tick();
+    self.connection.tick();
 
     for(var i = 0; i < self.components.length; i++)
     {
