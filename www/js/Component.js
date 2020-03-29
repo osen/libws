@@ -4,7 +4,7 @@ function Component()
 
   self.position = Vec3();
   self.rotation = Vec3();
-  self.scale = Vec3();
+  self.scale = Vec3(1, 1, 1);
 
   self.initialize = function()
   {
@@ -25,6 +25,21 @@ function Component()
   {
     if(self.onDisplay) self.onDisplay();
   };
+
+  self.getPosition = function()
+  {
+    return self.position;
+  };
+
+  self.getRotation = function()
+  {
+    return self.rotation;
+  }
+
+  self.getScale = function()
+  {
+    return self.scale;
+  }
 
   self.getCore = function()
   {

@@ -42,7 +42,7 @@ function Core()
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     gl.enable(gl.DEPTH_TEST);
-    gl.enable(gl.CULL_FACE);
+    //gl.enable(gl.CULL_FACE);
 
     for(var i = 0; i < self.components.length; i++)
     {
