@@ -24,5 +24,10 @@ function Resource()
     self.onLoadDefault();
   };
 
+  self.getCore = function()
+  {
+    return self.core;
+  };
+
   return self;
 }

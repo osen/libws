@@ -2,7 +2,7 @@ function TriangleRenderer()
 {
   var self = Component();
 
-  self.mesh = null;
+  self.model = null;
   self.shader = null;
   self.texture = null;
 
@@ -10,7 +10,7 @@ function TriangleRenderer()
   {
     var r = self.getResources();
 
-    self.mesh = r.loadDefaultModel();
+    self.model = r.loadDefaultModel();
     self.shader = r.loadDefaultShader();
     self.texture = r.loadDefaultTexture();
   }
