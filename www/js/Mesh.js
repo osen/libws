@@ -26,7 +26,7 @@ function Mesh(gl)
       buffer.push(positions[pi].x);
       buffer.push(positions[pi].y);
 
-      if(positions[pi].z !== null)
+      if(positions[pi].z != null)
       {
         self.components = 3;
         buffer.push(positions[pi].z);

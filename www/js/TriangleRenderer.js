@@ -17,6 +17,12 @@ function TriangleRenderer()
 
   self.onDisplay = function()
   {
+    self.shader.setProjection(self.getCamera().getProjection());
+
+    var model = Mat4(1);
+    model = model.translate(Vec3(0, 0, -5));
+    self.shader.setModel(model);
+
     self.shader.render(self.model);
   };
 

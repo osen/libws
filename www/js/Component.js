@@ -41,5 +41,10 @@ function Component()
     return self.getCore().getWindow();
   };
 
+  self.getCamera = function()
+  {
+    return self.getCore().getCamera();
+  };
+
   return self;
 }

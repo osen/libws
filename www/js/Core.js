@@ -5,6 +5,7 @@ function Core()
   self.components = [];
   self.window = Window(self);
   self.resources = Resources(self);
+  self.camera = Camera(self);
 
   self.start = function()
   {
@@ -36,14 +37,26 @@ function Core()
   {
     var gl = self.getGl();
 
-    gl.viewport(0, 0, self.window.getWidth(), self.window.getHeight());
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(0.5, 0.5, 0.5, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
 
     for(var i = 0; i < self.components.length; i++)
     {
       self.components[i].display();
     }
+
+    gl.disable(gl.DEPTH_TEST);
+
+    //for(var i = 0; i < self.components.length; i++)
+    //{
+    //  self.components[i].ui();
+    //}
+
+    gl.disable(gl.CULL_FACE);
   };
 
   self.frame = function()
@@ -73,6 +86,11 @@ function Core()
   self.getGl = function()
   {
     return self.getWindow().getGl();
+  };
+
+  self.getCamera = function()
+  {
+    return self.camera;
   };
 
   return self;
