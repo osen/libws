@@ -45,12 +45,10 @@ function Resources(core)
     var rtn = self.defaultShader;
     if(rtn) return rtn;
 
-/*
     rtn = Shader();
     rtn.core = self.core;
     rtn.loadDefault();
     self.defaultShader = rtn;
-*/
 
     return rtn;
   };

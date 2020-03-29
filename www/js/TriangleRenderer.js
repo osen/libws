@@ -17,7 +17,7 @@ function TriangleRenderer()
 
   self.onDisplay = function()
   {
-
+    self.shader.render(self.model);
   };
 
   return self;

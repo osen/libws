@@ -16,6 +16,7 @@ function Window(core)
   document.body.appendChild(self.canvas);
   self.canvas.style.background = "orange";
   self.canvas.style.flexGrow = 1;
+  //self.canvas.style.overflow = "hidden";
 
   self.gl = self.canvas.getContext("webgl");
 
@@ -27,6 +28,27 @@ function Window(core)
   self.getGl = function()
   {
     return self.gl;
+  };
+
+  self.getWidth = function()
+  {
+    return self.canvas.clientWidth;
+    //return window.innerWidth;
+  }
+
+  self.getHeight = function()
+  {
+    return self.canvas.clientHeight;
+    //return window.innerHeight;
+  }
+
+  self.tick = function()
+  {
+    //console.log(window.innerWidth);
+    self.canvas.width = 1;
+    self.canvas.height = 1;
+    self.canvas.width = self.getWidth();
+    self.canvas.height = self.getHeight();
   };
 
   return self;
