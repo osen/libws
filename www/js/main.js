@@ -4,7 +4,7 @@ function main()
   {
     var core = Core();
 
-    core.addComponent(TriangleRenderer);
+    //core.addComponent(TriangleRenderer);
 
     core.start();
   }

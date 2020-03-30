@@ -7,7 +7,6 @@ function Connection(core)
 
   self.onMessage = function(event)
   {
-    alert("Message: " + event.data);
     self.messages.push(event.data);
   };
 
@@ -53,10 +52,22 @@ function Connection(core)
     return self.connected;
   };
 
+  self.processMessage = function(message)
+  {
+    //alert(message);
+    self.core.addComponentByName("TriangleRenderer");
+  };
+
   self.tick = function()
   {
     if(!self.connected) return;
 
+    for(var mi = 0; mi < self.messages.length; mi++)
+    {
+      self.processMessage(self.messages[mi]);
+    }
+
+    self.messages = [];
   };
 
   self.connect();

@@ -24,6 +24,23 @@ function Core()
     return c;
   };
 
+  self.addComponentByName = function(name)
+  {
+    var ctor = window[name];
+
+    if(!ctor)
+    {
+      throw "Invalid component type";
+    }
+
+    if(typeof(ctor) != "function")
+    {
+      throw "Specified type is not a component";
+    }
+
+    self.addComponent(ctor);
+  };
+
   self.tick = function()
   {
     self.window.tick();
