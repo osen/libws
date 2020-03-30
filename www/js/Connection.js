@@ -9,9 +9,11 @@ function Connection(core)
   self.REMOVE_COMPONENT = 2;
   self.SET = 3;
 
+  self.CONTINUE = 1;
+
   self.onMessage = function(event)
   {
-    self.messages.push(splitString(event.data, "\t"));
+    self.messages.push(event.data);
   };
 
   self.onClose = function()
@@ -56,32 +58,43 @@ function Connection(core)
     return self.connected;
   };
 
-  self.processMessage = function(message)
+  self.processStream = function(message)
   {
-    if(message[0] == self.SET)
+    var m0 = message.getString();
+
+    if(m0 == self.SET)
     {
-      self.core.getComponentById(parseInt(message[1])).set(message[2], message[3]);
+      self.core.getComponentById(message.getInt()).set(
+        message.getString(), message.getString());
     }
-    else if(message[0] == self.ADD_COMPONENT)
+    else if(m0 == self.ADD_COMPONENT)
     {
-      self.core.addComponentByName(parseInt(message[1]), message[2]);
+      self.core.addComponentByName(message.getInt(), message.getString());
     }
-    else if(message[0] == self.REMOVE_COMPONENT)
+    else if(m0 == self.REMOVE_COMPONENT)
     {
-      self.core.getComponentById(message[1]).kill();
+      self.core.getComponentById(message.getInt()).kill();
     }
   };
 
   self.tick = function()
   {
     if(!self.connected) return;
+    if(self.messages.length < 1) return;
 
     for(var mi = 0; mi < self.messages.length; mi++)
     {
-      self.processMessage(self.messages[mi]);
+      console.log("[" + self.messages[mi] + "]");
+      var cs = CommandStream(self.messages[mi]);
+
+      while(!cs.isEmpty())
+      {
+        self.processStream(cs);
+      }
     }
 
     self.messages = [];
+    self.socket.send("" + self.CONTINUE);
   };
 
   self.connect();

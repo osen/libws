@@ -472,6 +472,28 @@ int _WsConnectionPoll(ref(WsServer) server, ref(WsConnection) connection,
   return 0;
 }
 
+void _WsRemoveDisconnected(ref(WsServer) server)
+{
+  ref(WsConnection) conn = NULL;
+  size_t ci = 0;
+
+  /*
+   * Clean up any disconnected sockets. These should have been
+   * handled and put in this state by the previous poll.
+   */
+  for(ci = 0; ci < vector_size(_(server).connections); ci++)
+  {
+    conn = vector_at(_(server).connections, ci);
+
+    if(_(conn).state == WS_STATE_DISCONNECTED)
+    {
+      _WsConnectionDestroy(conn);
+      vector_erase(_(server).connections, ci, 1);
+      ci--;
+    }
+  }
+}
+
 /****************************************************************************
  * _WsPollConnections
  *
@@ -491,22 +513,6 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
   ref(WsConnection) conn = NULL;
   size_t ci = 0;
   int rtn = 0;
-
-  /*
-   * Clean up any disconnected sockets. These should have been
-   * handled in the previous poll.
-   */
-  for(ci = 0; ci < vector_size(_(server).connections); ci++)
-  {
-    conn = vector_at(_(server).connections, ci);
-
-    if(_(conn).state == WS_STATE_DISCONNECTED)
-    {
-      _WsConnectionDestroy(conn);
-      vector_erase(_(server).connections, ci, 1);
-      ci--;
-    }
-  }
 
   /*
    * Early return if no connections to poll.
@@ -602,6 +608,9 @@ int _WsWaitForEvent(ref(WsServer) server, int timeout)
 int WsServerPoll(ref(WsServer) server, int timeout, struct WsEvent *event)
 {
   struct WsEvent ee = {0};
+
+  _WsRemoveDisconnected(server);
+
   /*
    * If timeout specified or infinite (-1) then batch select to wait for
    * an event to occur in that amount of time. If 0 timeout then just

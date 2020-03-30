@@ -14,7 +14,7 @@ function TriangleRenderer()
     self.shader = r.loadDefaultShader();
     self.texture = r.loadDefaultTexture();
 
-    self.getPosition().z = -5;
+    //self.getPosition().z = -5;
   }
 
   self.onDisplay = function()

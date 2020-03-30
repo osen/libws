@@ -34,6 +34,11 @@ function close()
   output("Close");
 }
 
+function message(event)
+{
+  output(event.data);
+}
+
 function send()
 {
   var message = document.getElementById("message")
@@ -56,6 +61,7 @@ function connect()
   socket.onclose = close;
   socket.onopen = connected;
   socket.onerror = error;
+  socket.onmessage = message;
 }
     </script>
   </head>

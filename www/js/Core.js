@@ -64,7 +64,7 @@ function Core()
     {
       if(self.components[i].isAlive() == false)
       {
-        self.components = self.components.splice(i, 1);
+        self.components.splice(i, 1);
         i--;
       }
     }

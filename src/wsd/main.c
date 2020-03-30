@@ -148,9 +148,8 @@ int main()
         vector_push_back(msg, 'r');
         vector_push_back(msg, 'e');
         vector_push_back(msg, 'r');
-        WsSend(event.connection, msg);
+        vector_push_back(msg, '\t');
 
-        vector_clear(msg);
         vector_push_back(msg, '3');
         vector_push_back(msg, '\t');
         vector_push_back(msg, '1');
@@ -172,6 +171,7 @@ int main()
         vector_push_back(msg, '-');
         vector_push_back(msg, '3');
         WsSend(event.connection, msg);
+
 /*
         vector_clear(msg);
         vector_push_back(msg, '2');
@@ -180,6 +180,7 @@ int main()
         vector_push_back(msg, '7');
         WsSend(event.connection, msg);
 */
+
         vector_delete(msg);
       }
       else if(event.type == WS_DISCONNECT)
