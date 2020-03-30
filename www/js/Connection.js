@@ -5,9 +5,13 @@ function Connection(core)
   self.connected = false;
   self.messages = [];
 
+  self.ADD_COMPONENT = 1;
+  self.REMOVE_COMPONENT = 2;
+  self.SET = 3;
+
   self.onMessage = function(event)
   {
-    self.messages.push(event.data);
+    self.messages.push(splitString(event.data, "\t"));
   };
 
   self.onClose = function()
@@ -54,8 +58,18 @@ function Connection(core)
 
   self.processMessage = function(message)
   {
-    //alert(message);
-    self.core.addComponentByName("TriangleRenderer");
+    if(message[0] == self.SET)
+    {
+      self.core.getComponentById(parseInt(message[1])).set(message[2], message[3]);
+    }
+    else if(message[0] == self.ADD_COMPONENT)
+    {
+      self.core.addComponentByName(parseInt(message[1]), message[2]);
+    }
+    else if(message[0] == self.REMOVE_COMPONENT)
+    {
+      self.core.getComponentById(message[1]).kill();
+    }
   };
 
   self.tick = function()

@@ -13,18 +13,32 @@ function Core()
     window.requestAnimationFrame(self.frame);
   };
 
-  self.addComponent = function(ctor)
+  self.getComponentById = function(id)
+  {
+    for(var i = 0; i < self.components.length; i++)
+    {
+      if(self.components[i].getId() == id)
+      {
+        return self.components[i];
+      }
+    }
+
+    throw "Component with the specified ID does not exist";
+  };
+
+  self.addComponent = function(id, ctor)
   {
     var c = ctor();
 
     self.components.push(c);
+    c.id = id;
     c.core = self;
     c.initialize();
 
     return c;
   };
 
-  self.addComponentByName = function(name)
+  self.addComponentByName = function(id, name)
   {
     var ctor = window[name];
 
@@ -38,13 +52,22 @@ function Core()
       throw "Specified type is not a component";
     }
 
-    self.addComponent(ctor);
+    self.addComponent(id, ctor);
   };
 
   self.tick = function()
   {
     self.window.tick();
     self.connection.tick();
+
+    for(var i = 0; i < self.components.length; i++)
+    {
+      if(self.components[i].isAlive() == false)
+      {
+        self.components = self.components.splice(i, 1);
+        i--;
+      }
+    }
 
     for(var i = 0; i < self.components.length; i++)
     {

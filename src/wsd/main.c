@@ -127,11 +127,59 @@ int main()
       {
         printf("Client Connected\n");
         vector(unsigned char) msg = vector_new(unsigned char);
-        vector_push_back(msg, 'H');
-        vector_push_back(msg, 'E');
-        vector_push_back(msg, 'L');
-        vector_push_back(msg, 'O');
+        vector_push_back(msg, '1');
+        vector_push_back(msg, '\t');
+        vector_push_back(msg, '1');
+        vector_push_back(msg, '7');
+        vector_push_back(msg, '\t');
+        vector_push_back(msg, 'T');
+        vector_push_back(msg, 'r');
+        vector_push_back(msg, 'i');
+        vector_push_back(msg, 'a');
+        vector_push_back(msg, 'n');
+        vector_push_back(msg, 'g');
+        vector_push_back(msg, 'l');
+        vector_push_back(msg, 'e');
+        vector_push_back(msg, 'R');
+        vector_push_back(msg, 'e');
+        vector_push_back(msg, 'n');
+        vector_push_back(msg, 'd');
+        vector_push_back(msg, 'e');
+        vector_push_back(msg, 'r');
+        vector_push_back(msg, 'e');
+        vector_push_back(msg, 'r');
         WsSend(event.connection, msg);
+
+        vector_clear(msg);
+        vector_push_back(msg, '3');
+        vector_push_back(msg, '\t');
+        vector_push_back(msg, '1');
+        vector_push_back(msg, '7');
+        vector_push_back(msg, '\t');
+        vector_push_back(msg, 'p');
+        vector_push_back(msg, 'o');
+        vector_push_back(msg, 's');
+        vector_push_back(msg, 'i');
+        vector_push_back(msg, 't');
+        vector_push_back(msg, 'i');
+        vector_push_back(msg, 'o');
+        vector_push_back(msg, 'n');
+        vector_push_back(msg, '\t');
+        vector_push_back(msg, '0');
+        vector_push_back(msg, ',');
+        vector_push_back(msg, '0');
+        vector_push_back(msg, ',');
+        vector_push_back(msg, '-');
+        vector_push_back(msg, '3');
+        WsSend(event.connection, msg);
+/*
+        vector_clear(msg);
+        vector_push_back(msg, '2');
+        vector_push_back(msg, '\t');
+        vector_push_back(msg, '1');
+        vector_push_back(msg, '7');
+        WsSend(event.connection, msg);
+*/
         vector_delete(msg);
       }
       else if(event.type == WS_DISCONNECT)

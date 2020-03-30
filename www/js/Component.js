@@ -2,9 +2,39 @@ function Component()
 {
   var self = {};
 
+  self.alive = true;
+  self.id = 0;
   self.position = Vec3();
   self.rotation = Vec3();
   self.scale = Vec3(1, 1, 1);
+
+  self.set = function(variable, value)
+  {
+    if(self.onSet) self.onSet(variable, value);
+
+    if(variable == "position")
+    {
+      var pos = splitString(value, ",");
+      self.position.x = parseFloat(pos[0]);
+      self.position.y = parseFloat(pos[1]);
+      self.position.z = parseFloat(pos[2]);
+    }
+  };
+
+  self.getId = function()
+  {
+    return self.id;
+  };
+
+  self.isAlive = function()
+  {
+    return self.alive;
+  };
+
+  self.kill = function()
+  {
+    self.alive = false;
+  };
 
   self.initialize = function()
   {
