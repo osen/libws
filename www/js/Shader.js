@@ -111,11 +111,13 @@ function Shader()
       "attribute vec3 a_Position;                                    \n" +
       "                                                              \n" +
       "uniform mat4 u_Projection;                                    \n" +
+      "uniform mat4 u_View;                                          \n" +
       "uniform mat4 u_Model;                                         \n" +
       "                                                              \n" +
       "void main()                                                   \n" +
       "{                                                             \n" +
-      "  gl_Position = u_Projection * u_Model * vec4(a_Position, 1); \n" +
+      "  gl_Position = u_Projection * u_View * u_Model *             \n" +
+      "    vec4(a_Position, 1);                                      \n" +
       "}                                                             \n"
     );
 

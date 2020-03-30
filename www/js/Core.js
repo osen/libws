@@ -5,7 +5,6 @@ function Core()
   self.components = [];
   self.window = Window(self);
   self.resources = Resources(self);
-  self.camera = Camera(self);
   self.connection = Connection(self);
 
   self.start = function()
@@ -134,6 +133,8 @@ function Core()
   {
     return self.camera;
   };
+
+  self.camera = self.addComponent(-1, Camera);
 
   return self;
 }

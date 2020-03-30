@@ -20,15 +20,10 @@ function TriangleRenderer()
   self.onDisplay = function()
   {
     self.shader.setProjection(self.getCamera().getProjection());
+    self.shader.setView(self.getCamera().getView());
 
-    self.getRotation().y += 0.1;
-
-    var model = Mat4(1);
-    model = model.translate(self.getPosition());
-    model = model.rotate(self.getRotation().y, Vec3(0, 1, 0));
-    model = model.rotate(self.getRotation().x, Vec3(1, 0, 0));
-    // TODO: Scale
-    self.shader.setModel(model);
+    self.getRotation().y += 1;
+    self.shader.setModel(self.getModel());
 
     self.shader.render(self.model);
   };

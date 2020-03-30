@@ -21,6 +21,18 @@ function Component()
     }
   };
 
+  self.getModel = function()
+  {
+    var rtn = Mat4(1);
+
+    rtn = rtn.translate(self.position);
+    rtn = rtn.rotate(self.rotation.y, Vec3(0, 1, 0));
+    rtn = rtn.rotate(self.rotation.x, Vec3(1, 0, 0));
+    // TODO: Scale
+
+    return rtn;
+  };
+
   self.getId = function()
   {
     return self.id;
