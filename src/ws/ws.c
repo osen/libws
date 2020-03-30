@@ -487,11 +487,26 @@ int _WsConnectionPoll(ref(WsServer) server, ref(WsConnection) connection,
  ****************************************************************************/
 int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 {
-  size_t begin = 0;
   size_t incs = 0;
   ref(WsConnection) conn = NULL;
   size_t ci = 0;
   int rtn = 0;
+
+  /*
+   * Clean up any disconnected sockets. These should have been
+   * handled in the previous poll.
+   */
+  for(ci = 0; ci < vector_size(_(server).connections); ci++)
+  {
+    conn = vector_at(_(server).connections, ci);
+
+    if(_(conn).state == WS_STATE_DISCONNECTED)
+    {
+      _WsConnectionDestroy(conn);
+      vector_erase(_(server).connections, ci, 1);
+      ci--;
+    }
+  }
 
   /*
    * Early return if no connections to poll.
@@ -501,8 +516,12 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
     return 0;
   }
 
-  begin = _(server).nextToPoll;
-  ci = begin;
+  if(_(server).nextToPoll >= vector_size(_(server).connections))
+  {
+    _(server).nextToPoll = 0;
+  }
+
+  ci = _(server).nextToPoll;
 
   while(1)
   {
@@ -515,7 +534,7 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
       ci = 0;
     }
 
-    if(ci == begin && incs > 0)
+    if(ci == _(server).nextToPoll && incs > 0)
     {
       break;
     }
@@ -533,24 +552,7 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
     ci++;
   }
 
-  for(ci = 0; ci < vector_size(_(server).connections); ci++)
-  {
-    conn = vector_at(_(server).connections, ci);
-
-    if(_(conn).state == WS_STATE_DISCONNECTED)
-    {
-      _WsConnectionDestroy(conn);
-      vector_erase(_(server).connections, ci, 1);
-      ci--;
-    }
-  }
-
   _(server).nextToPoll++;
-
-  if(_(server).nextToPoll >= vector_size(_(server).connections))
-  {
-    _(server).nextToPoll = 0;
-  }
 
   return rtn;
 }

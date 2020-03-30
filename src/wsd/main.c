@@ -134,6 +134,10 @@ int main()
         WsSend(event.connection, msg);
         vector_delete(msg);
       }
+      else if(event.type == WS_DISCONNECT)
+      {
+        printf("Client Disconnected\n");
+      }
       else
       {
         printf("Unhandled Event: %i\n", event.type);
