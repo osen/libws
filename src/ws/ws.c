@@ -32,6 +32,7 @@ struct WsConnection
   vector(unsigned char) buffer;
   vector(unsigned char) incoming;
   vector(unsigned char) outgoing;
+  int incomplete;
 };
 
 struct WsHttpRequest
@@ -303,6 +304,7 @@ int _WsConnectionProcessWebSocket(ref(WsServer) server, ref(WsConnection) connec
    */
   if(!fr)
   {
+    _(connection).incomplete = 1;
     return 0;
   }
 
@@ -440,15 +442,22 @@ int _WsConnectionPoll(ref(WsServer) server, ref(WsConnection) connection,
   }
 
   /*
-   * Return if no data is waiting.
+   * Return if no data is waiting but only if the websocket last packet was
+   * incomplete. There might be more frames after it.
    */
   if(WsTcpSocketReady(_(connection).socket) == 0)
   {
+    if(_(connection).state == WS_STATE_WEBSOCKET && !_(connection).incomplete)
+    {
+      return _WsConnectionProcessWebSocket(server, connection, event);
+    }
+
     return 0;
   }
 
   vector_resize(_(connection).buffer, 1024);
   WsTcpSocketRecv(_(connection).socket, _(connection).buffer);
+  _(connection).incomplete = 0;
 
   /*
    * Copy data from buffer into incoming stream.
@@ -570,6 +579,21 @@ int _WsWaitForEvent(ref(WsServer) server, int timeout)
   size_t ci = 0;
   ref(WsConnection) conn = NULL;
   int rtn = 0;
+
+  /*
+   * Skip check if there may be a connection with additional
+   * websocket frames in the buffer.
+   */
+  for(ci = 0; ci < vector_size(_(server).connections); ci++)
+  {
+    conn = vector_at(_(server).connections, ci);
+
+    if(vector_size(_(conn).incoming) > 0 &&
+      !_(conn).incomplete)
+    {
+      return 1;
+    }
+  }
 
   reads = vector_new(ref(WsTcpSocket));
   writes = vector_new(ref(WsTcpSocket));

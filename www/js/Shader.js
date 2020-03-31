@@ -9,6 +9,7 @@ function Shader()
   self.projectionUniform = -1;
   self.viewUniform = -1;
   self.modelUniform = -1;
+  self.textureUniform = -1;
 
   self.setProjection = function(projection)
   {
@@ -35,6 +36,18 @@ function Shader()
     gl.useProgram(self.id);
     gl.uniformMatrix4fv(self.modelUniform, false, model.m);
     gl.useProgram(null);
+  };
+
+  self.setTexture = function(texture)
+  {
+    if(self.textureUniform == -1) return;
+    var gl = self.getCore().getGl();
+    gl.useProgram(self.id);
+    gl.uniform1i(self.textureUniform, 0);
+    gl.useProgram(null);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture.id);
   };
 
   self.render = function(model)
@@ -100,6 +113,7 @@ function Shader()
     self.projectionUniform = gl.getUniformLocation(self.id, 'u_Projection');
     self.viewUniform = gl.getUniformLocation(self.id, 'u_View');
     self.modelUniform = gl.getUniformLocation(self.id, 'u_Model');
+    self.textureUniform = gl.getUniformLocation(self.id, 'u_Texture');
   };
 
   self.onLoadDefault = function()
@@ -109,15 +123,20 @@ function Shader()
 
     gl.shaderSource(vertId,
       "attribute vec3 a_Position;                                    \n" +
+      "attribute vec2 a_TexCoord;                                    \n" +
       "                                                              \n" +
       "uniform mat4 u_Projection;                                    \n" +
       "uniform mat4 u_View;                                          \n" +
       "uniform mat4 u_Model;                                         \n" +
       "                                                              \n" +
+      "varying vec2 v_TexCoord;                                      \n" +
+      "                                                              \n" +
       "void main()                                                   \n" +
       "{                                                             \n" +
       "  gl_Position = u_Projection * u_View * u_Model *             \n" +
       "    vec4(a_Position, 1);                                      \n" +
+      "                                                              \n" +
+      "  v_TexCoord = a_TexCoord;                                    \n" +
       "}                                                             \n"
     );
 
@@ -131,10 +150,17 @@ function Shader()
     var fragId = gl.createShader(gl.FRAGMENT_SHADER);
 
     gl.shaderSource(fragId,
-      "void main()                          \n" +
-      "{                                    \n" +
-      "  gl_FragColor = vec4(1, 0, 0, 1);   \n" +
-      "}                                    \n"
+      "precision mediump float;                       \n" +
+      "                                               \n" +
+      "varying vec2 v_TexCoord;                       \n" +
+      "                                               \n" +
+      "uniform sampler2D u_Texture;                   \n" +
+      "                                               \n" +
+      "void main()                                    \n" +
+      "{                                              \n" +
+      "  vec4 tex = texture2D(u_Texture, v_TexCoord); \n" +
+      "  gl_FragColor = tex;                          \n" +
+      "}                                              \n"
     );
 
     gl.compileShader(fragId);

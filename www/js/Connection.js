@@ -10,6 +10,9 @@ function Connection(core)
   self.SET = 3;
 
   self.CONTINUE = 1;
+  self.KEY_PRESSED = 2;
+  self.KEY_DOWN = 3;
+  self.KEY_UP = 4;
 
   self.onMessage = function(event)
   {
@@ -75,6 +78,17 @@ function Connection(core)
     {
       self.core.getComponentById(message.getInt()).kill();
     }
+  };
+
+  self.send = function(message)
+  {
+    if(!self.connected)
+    {
+      throw "Connection is not established";
+    };
+
+    self.socket.send(message);
+    //console.log(message);
   };
 
   self.tick = function()

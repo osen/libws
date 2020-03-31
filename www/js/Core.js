@@ -6,6 +6,7 @@ function Core()
   self.window = Window(self);
   self.resources = Resources(self);
   self.connection = Connection(self);
+  self.input = Input(self);
 
   self.start = function()
   {
@@ -58,6 +59,7 @@ function Core()
   {
     self.window.tick();
     self.connection.tick();
+    self.input.tick();
 
     for(var i = 0; i < self.components.length; i++)
     {
@@ -132,6 +134,16 @@ function Core()
   self.getCamera = function()
   {
     return self.camera;
+  };
+
+  self.getConnection = function()
+  {
+    return self.connection;
+  };
+
+  self.getInput = function()
+  {
+    return self.input;
   };
 
   self.camera = self.addComponent(-1, Camera);

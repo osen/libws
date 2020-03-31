@@ -25,6 +25,8 @@ function TriangleRenderer()
     self.getRotation().y += 1;
     self.shader.setModel(self.getModel());
 
+    self.shader.setTexture(self.texture);
+
     self.shader.render(self.model);
   };
 

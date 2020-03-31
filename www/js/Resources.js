@@ -58,12 +58,10 @@ function Resources(core)
     var rtn = self.defaultTexture;
     if(rtn) return rtn;
 
-/*
     rtn = Texture();
     rtn.core = self.core;
     rtn.loadDefault();
     self.defaultTexture = rtn;
-*/
 
     return rtn;
   };
