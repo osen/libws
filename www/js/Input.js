@@ -6,6 +6,26 @@ function Input(core)
   self.downKeys = [];
   self.upKeys = [];
 
+  self.keyTable =
+    " !\"#$%&'()*+,-./0123456789:;<=>?@" +
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+    "[\\]^_`" +
+    "abcdefghijklmnopqrstuvwxyz" +
+    "{|}~";
+
+  self.convertKey = function(key)
+  {
+    for(var kti = 0; kti < self.keyTable.length; kti++)
+    {
+      if(self.keyTable[kti] == key)
+      {
+        return kti;
+      }
+    }
+
+    return -1;
+  };
+
   self.onKeyPress = function(event)
   {
     self.pressedKeys.push(event.key);
@@ -30,17 +50,23 @@ function Input(core)
     {
       for(var ki = 0; ki < self.pressedKeys.length; ki++)
       {
-        connection.send(connection.KEY_PRESSED + "\t" + self.pressedKeys[ki]);
+        var kc = self.convertKey(self.pressedKeys[ki]);
+        if(kc == -1) continue;
+        connection.send(connection.KEY_PRESSED + "\t" + kc);
       }
 
       for(var ki = 0; ki < self.downKeys.length; ki++)
       {
-        connection.send(connection.KEY_DOWN + "\t" + self.downKeys[ki]);
+        var kc = self.convertKey(self.downKeys[ki]);
+        if(kc == -1) continue;
+        connection.send(connection.KEY_DOWN + "\t" + kc);
       }
 
       for(var ki = 0; ki < self.upKeys.length; ki++)
       {
-        connection.send(connection.KEY_UP + "\t" + self.upKeys[ki]);
+        var kc = self.convertKey(self.upKeys[ki]);
+        if(kc == -1) continue;
+        connection.send(connection.KEY_UP + "\t" + kc);
       }
     }
 
