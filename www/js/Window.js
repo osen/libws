@@ -8,8 +8,10 @@ function Window(core)
   document.documentElement.style.height = "100%";
 
   document.body.style.margin = "0em";
-  document.body.style.minWidth = "100%";
-  document.body.style.minHeight = "100%";
+  //document.body.style.minWidth = "100%";
+  //document.body.style.minHeight = "100%";
+  document.body.style.width = "100%";
+  document.body.style.height = "100%";
   document.body.style.display = "flex";
 
   self.canvas = document.createElement("canvas");
