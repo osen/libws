@@ -11,6 +11,8 @@ function Shader()
   self.modelUniform = -1;
   self.textureUniform = -1;
 
+  self.texture = null;
+
   self.setProjection = function(projection)
   {
     if(self.projectionUniform == -1) return;
@@ -40,14 +42,7 @@ function Shader()
 
   self.setTexture = function(texture)
   {
-    if(self.textureUniform == -1) return;
-    var gl = self.getCore().getGl();
-    gl.useProgram(self.id);
-    gl.uniform1i(self.textureUniform, 0);
-    gl.useProgram(null);
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture.id);
+    self.texture = texture;
   };
 
   self.render = function(model)
@@ -60,6 +55,21 @@ function Shader()
     }
 
     gl.useProgram(self.id);
+
+    if(self.textureUniform != -1)
+    {
+      gl.uniform1i(self.textureUniform, 0);
+      gl.activeTexture(gl.TEXTURE0);
+
+      if(self.texture)
+      {
+        gl.bindTexture(gl.TEXTURE_2D, self.texture.id);
+      }
+      else
+      {
+        gl.bindTexture(gl.TEXTURE_2D, null);
+      }
+    }
 
     for(var mi = 0; mi < model.meshes.length; mi++)
     {
@@ -83,7 +93,7 @@ function Shader()
         gl.enableVertexAttribArray(self.normalAttrib);
       }
 
-      gl.drawArrays(gl.TRIANGLES, 0, mesh.vertCount);
+      gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount);
 
       if(self.coordAttrib != -1 && mesh.coordVbo != null)
       {
@@ -99,6 +109,14 @@ function Shader()
     }
 
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+    if(self.textureUniform != -1)
+    {
+      gl.uniform1i(self.textureUniform, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+
     gl.useProgram(null);
   };
 

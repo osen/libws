@@ -3,7 +3,7 @@ function Mesh(gl)
   var self = {};
   self.gl = gl;
   self.components = null;
-  self.vertCount = 0;
+  self.vertexCount = 0;
   self.positionVbo = null;
   self.coordVbo = null;
   self.normalVbo = null;
@@ -16,7 +16,7 @@ function Mesh(gl)
     gl.bindBuffer(gl.ARRAY_BUFFER, self.positionVbo);
     var buffer = [];
 
-    self.vertCount = positions.length;
+    self.vertexCount = positions.length;
     self.coordVbo = null;
     self.normalVbo = null;
     self.components = 2;
