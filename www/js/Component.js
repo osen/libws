@@ -103,5 +103,10 @@ function Component()
     return self.getCore().getCamera();
   };
 
+  self.getDeltaTime = function()
+  {
+    return self.getCore().getDeltaTime();
+  };
+
   return self;
 }

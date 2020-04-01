@@ -5,13 +5,26 @@ function Input(core)
   self.pressedKeys = [];
   self.downKeys = [];
   self.upKeys = [];
+  self.keyTable = [];
 
-  self.keyTable =
-    " !\"#$%&'()*+,-./0123456789:;<=>?@" +
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-    "[\\]^_`" +
-    "abcdefghijklmnopqrstuvwxyz" +
-    "{|}~";
+  self.pupulateTables = function()
+  {
+    var keys =
+      " !\"#$%&'()*+,-./0123456789:;<=>?@" +
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+      "[\\]^_`" +
+      "abcdefghijklmnopqrstuvwxyz" +
+      "{|}~";
+
+    for(var i = 0; i < keys.length; i++)
+    {
+      self.keyTable.push(keys[i]);
+    }
+
+    self.keyTable.push("Enter");
+    self.keyTable.push("Backspace");
+    self.keyTable.push("Delete");
+  };
 
   self.convertKey = function(key)
   {
@@ -23,6 +36,7 @@ function Input(core)
       }
     }
 
+    console.log("Unhandled Key: " + key);
     return -1;
   };
 
@@ -74,6 +88,8 @@ function Input(core)
     if(self.downKeys.length > 0) self.downKeys = [];
     if(self.upKeys.length > 0) self.upKeys = [];
   };
+
+  self.pupulateTables();
 
   window.addEventListener("keypress", self.onKeyPress);
   window.addEventListener("keydown", self.onKeyDown);

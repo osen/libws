@@ -2,6 +2,8 @@ function Core()
 {
   var self = {};
 
+  self.lastTime = 0;
+  self.deltaTime = 0;
   self.components = [];
   self.window = Window(self);
   self.resources = Resources(self);
@@ -10,6 +12,7 @@ function Core()
 
   self.start = function()
   {
+    self.lastTime = Date.now();
     window.requestAnimationFrame(self.frame);
   };
 
@@ -55,8 +58,18 @@ function Core()
     self.addComponent(id, ctor);
   };
 
+  self.calculateDeltaTime = function()
+  {
+    var now = Date.now();
+    var diff = now - self.lastTime;
+    self.lastTime = now;
+    self.deltaTime = diff / 1000;
+  };
+
   self.tick = function()
   {
+    self.calculateDeltaTime();
+
     self.window.tick();
     self.connection.tick();
     self.input.tick();
@@ -144,6 +157,11 @@ function Core()
   self.getInput = function()
   {
     return self.input;
+  };
+
+  self.getDeltaTime = function()
+  {
+    return self.deltaTime;
   };
 
   self.camera = self.addComponent(-1, Camera);

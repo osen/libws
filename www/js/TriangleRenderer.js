@@ -22,7 +22,7 @@ function TriangleRenderer()
     self.shader.setProjection(self.getCamera().getProjection());
     self.shader.setView(self.getCamera().getView());
 
-    self.getRotation().y += 1;
+    self.getRotation().y += 180 * self.getDeltaTime();
     self.shader.setModel(self.getModel());
 
     self.shader.setTexture(self.texture);
