@@ -23,6 +23,9 @@ struct WsServer
   vector(ref(WsConnection)) connections;
   size_t nextToPoll;
   struct WsEvent events;
+
+  vector(ref(WsTcpSocket)) toReadPoll;
+  vector(ref(WsTcpSocket)) toWritePoll;
 };
 
 struct WsConnection
@@ -68,6 +71,9 @@ ref(WsServer) WsServerListen(int port)
   _(_(_(rtn).events.http).request).path = sstream_new();
   _(_(rtn).events.http).response = allocate(WsHttpResponse);
   _(_(_(rtn).events.http).response).data = vector_new(unsigned char);
+
+  _(rtn).toReadPoll = vector_new(ref(WsTcpSocket));
+  _(rtn).toWritePoll = vector_new(ref(WsTcpSocket));
 
   _(rtn).connections = vector_new(ref(WsConnection));
   _(rtn).socket = WsTcpListen(port);
@@ -574,8 +580,6 @@ int _WsPollConnections(ref(WsServer) server, struct WsEvent *event)
 
 int _WsWaitForEvent(ref(WsServer) server, int timeout)
 {
-  vector(ref(WsTcpSocket)) reads = NULL;
-  vector(ref(WsTcpSocket)) writes = NULL;
   size_t ci = 0;
   ref(WsConnection) conn = NULL;
   int rtn = 0;
@@ -595,24 +599,22 @@ int _WsWaitForEvent(ref(WsServer) server, int timeout)
     }
   }
 
-  reads = vector_new(ref(WsTcpSocket));
-  writes = vector_new(ref(WsTcpSocket));
-  vector_push_back(reads, _(server).socket);
+  vector_clear(_(server).toReadPoll);
+  vector_clear(_(server).toWritePoll);
+  vector_push_back(_(server).toReadPoll, _(server).socket);
 
   for(ci = 0; ci < vector_size(_(server).connections); ci++)
   {
     conn = vector_at(_(server).connections, ci);
-    vector_push_back(reads, _(conn).socket);
+    vector_push_back(_(server).toReadPoll, _(conn).socket);
 
     if(vector_size(_(conn).outgoing) > 0)
     {
-      vector_push_back(writes, _(conn).socket);
+      vector_push_back(_(server).toWritePoll, _(conn).socket);
     }
   }
 
-  rtn = WsTcpSocketsReady(reads, writes, timeout);
-  vector_delete(reads);
-  vector_delete(writes);
+  rtn = WsTcpSocketsReady(_(server).toReadPoll, _(server).toWritePoll, timeout);
 
   return rtn;
 }
@@ -675,6 +677,9 @@ void WsServerClose(ref(WsServer) server)
   sstream_delete(_(_(_(server).events.http).request).path);
   release(_(_(server).events.http).request);
   release(_(server).events.http);
+
+  vector_delete(_(server).toReadPoll);
+  vector_delete(_(server).toWritePoll);
 
   for(ci = 0; ci < vector_size(_(server).connections); ci++)
   {
