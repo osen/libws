@@ -19,20 +19,29 @@ void wait()
 
 void handle_client(ref(WsTcpSocket) client)
 {
-  vector(unsigned char) data = NULL;
+  vector(unsigned char) incoming = NULL;
+  vector(unsigned char) outgoing = NULL;
 
-  data = vector_new(unsigned char);
+  incoming = vector_new(unsigned char);
+  outgoing = vector_new(unsigned char);
 
   while(WsTcpSocketConnected(client))
   {
-    if(WsTcpSocketReady(client))
+    vector_resize(incoming, 128);
+    WsTcpSocketRecv(client, incoming);
+
+    if(vector_size(incoming) > 0)
     {
-      printf("Client ready\n");
       printf("Data received\n");
-      vector_resize(data, 128);
-      WsTcpSocketRecv(client, data);
-      printf("Received: %i\n", (int)vector_size(data));
-      WsTcpSocketSend(client, data);
+      vector_insert(outgoing, vector_size(outgoing), incoming, 0, vector_size(incoming));
+      vector_push_back(incoming, '\0');
+      printf("Received [%i]: [%s]\n", (int)vector_size(incoming), (char *)&vector_at(incoming, 0));
+    }
+
+    if(vector_size(outgoing) > 0)
+    {
+      printf("Sending [%i]\n", (int)vector_size(outgoing));
+      WsTcpSocketSend(client, outgoing);
     }
 
     wait();
@@ -40,7 +49,8 @@ void handle_client(ref(WsTcpSocket) client)
 
   printf("Client disconnected\n");
   WsTcpSocketClose(client);
-  vector_delete(data);
+  vector_delete(incoming);
+  vector_delete(outgoing);
 }
 
 int main()
@@ -53,16 +63,16 @@ int main()
 
   while(1)
   {
-    if(WsTcpSocketReady(server))
+    client = WsTcpSocketAccept(server);
+
+    if(client)
     {
-      printf("Client ready\n");
-      client = WsTcpSocketAccept(server);
       printf("Client accepted\n");
       handle_client(client);
       count++;
-
-      if(count >= 3) break;
     }
+
+    if(count >= 3) break;
 
     wait();
   }

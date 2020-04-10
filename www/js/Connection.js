@@ -47,7 +47,8 @@ function Connection(core)
       }
     }
 
-    url = "ws" + url;
+    url = "wss" + url;
+    //url = "ws" + url;
     self.socket = new WebSocket(url);
   
     self.socket.onclose = self.onClose;

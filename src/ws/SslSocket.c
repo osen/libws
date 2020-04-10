@@ -3,13 +3,16 @@
 #define STENT_IMPLEMENTATION
 #include "stent.h"
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #ifdef _WIN32
   #define USE_WINSOCK
 #else
   #define USE_POSIX
 #endif
 
-#define TCPSOCKET_BACKLOG 8
+#define TCPSOCKET_BACKLOG 32
 
 #ifdef USE_POSIX
   #include <sys/socket.h>
@@ -18,7 +21,7 @@
   #include <fcntl.h>
   #include <unistd.h>
   #include <sys/select.h>
-  #include <errno.h>
+  #include <signal.h>
 #endif
 
 #ifdef USE_WINSOCK
@@ -27,6 +30,10 @@
   #include <winsock2.h>
   #include <ws2tcpip.h>
 #endif
+
+#define STATE_DISCONNECTED 0
+#define STATE_CONNECTED 1
+#define STATE_LISTEN 2
 
 struct WsTcpSocket
 {
@@ -37,6 +44,11 @@ struct WsTcpSocket
   int fd;
 #endif
   int state;
+  int handshake;
+
+  SSL *ssl;
+  SSL_CTX *sslContext;
+  vector(unsigned char) outgoing;
 };
 
 void _WsPanic(char *message)
@@ -124,6 +136,9 @@ ref(WsTcpSocket) WsTcpListen(int port)
   server.sin_port = htons(port);
 #endif
 
+  // TODO: Clean up
+  signal(SIGPIPE, SIG_IGN);
+
   if(
 #ifdef USE_POSIX
     setsockopt(_(rtn).fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(int)) == -1 ||
@@ -153,13 +168,59 @@ ref(WsTcpSocket) WsTcpListen(int port)
   freeaddrinfo(result);
 #endif
 
-  _(rtn).state = 1;
+  ERR_clear_error();
+  _(rtn).sslContext = SSL_CTX_new(SSLv23_server_method());
+
+  if(!_(rtn).sslContext)
+  {
+#ifdef USE_POSIX
+    close(_(rtn).fd);
+#endif
+#ifdef USE_WINSOCK
+    closesocket(_(rtn).fd);
+#endif
+    release(rtn);
+    _WsPanic("Failed to create SSL context");
+  }
+
+  SSL_CTX_set_ecdh_auto(_(rtn).sslContext, 1);
+
+  if(SSL_CTX_use_certificate_file(_(rtn).sslContext, "cert.pem", SSL_FILETYPE_PEM) <= 0)
+  {
+    _WsPanic("Failed to apply certificate");
+  }
+
+  if(SSL_CTX_use_PrivateKey_file(_(rtn).sslContext, "key.pem", SSL_FILETYPE_PEM) <= 0 )
+  {
+    _WsPanic("Failed to apply private key");
+  }
+
+  _(rtn).state = STATE_LISTEN;
 
   return rtn;
 }
 
 void WsTcpSocketClose(ref(WsTcpSocket) ctx)
 {
+  if(_(ctx).handshake)
+  {
+    // TODO: Send to completion.
+    SSL_shutdown(_(ctx).ssl);
+  }
+
+  /*
+   * A client socket has slightly different data to a listen socket.
+   */
+  if(_(ctx).outgoing)
+  {
+    vector_delete(_(ctx).outgoing);
+    SSL_free(_(ctx).ssl);
+  }
+  else
+  {
+    SSL_CTX_free(_(ctx).sslContext);
+  }
+
 #ifdef USE_POSIX
   close(_(ctx).fd);
 #endif
@@ -172,7 +233,7 @@ void WsTcpSocketClose(ref(WsTcpSocket) ctx)
 
 int WsTcpSocketConnected(ref(WsTcpSocket) ctx)
 {
-  if(_(ctx).state == 0)
+  if(_(ctx).state == STATE_DISCONNECTED)
   {
     return 0;
   }
@@ -189,6 +250,7 @@ int WsTcpSocketsReady(vector(ref(WsTcpSocket)) reads,
   size_t i = 0;
   int cfd = 0;
   int mfd = 0;
+  ref(WsTcpSocket) sock = NULL;
 
   tv.tv_sec = timeout / 1000;
   tv.tv_usec = timeout % 1000;
@@ -198,7 +260,9 @@ int WsTcpSocketsReady(vector(ref(WsTcpSocket)) reads,
 
   for(i = 0; i < vector_size(reads); i++)
   {
-    cfd = _(vector_at(reads, i)).fd;
+    sock = vector_at(reads, i);
+
+    cfd = _(sock).fd;
     FD_SET(cfd, &readfds);
 
     if(cfd > mfd)
@@ -209,7 +273,9 @@ int WsTcpSocketsReady(vector(ref(WsTcpSocket)) reads,
 
   for(i = 0; i < vector_size(writes); i++)
   {
-    cfd = _(vector_at(writes, i)).fd;
+    sock = vector_at(writes, i);
+
+    cfd = _(sock).fd;
     FD_SET(cfd, &writefds);
 
     if(cfd > mfd)
@@ -253,145 +319,144 @@ int WsTcpSocketsReady(vector(ref(WsTcpSocket)) reads,
   return 0;
 }
 
+int DoneHandshake(ref(WsTcpSocket) ctx)
+{
+  int sslResult = 0;
+
+  if(_(ctx).handshake)
+  {
+    return 1;
+  }
+
+  ERR_clear_error();
+  sslResult = SSL_accept(_(ctx).ssl);
+  //printf("[handshake] %i\n", sslResult);
+
+  if(sslResult < 1)
+  {
+    sslResult = SSL_get_error(_(ctx).ssl, sslResult);
+
+    if(sslResult == SSL_ERROR_WANT_READ || sslResult == SSL_ERROR_WANT_WRITE)
+    {
+      //printf("[handshake_notready]\n");
+    }
+    else
+    {
+      //printf("[handshake_error] %i\n", sslResult);
+      _(ctx).state = STATE_DISCONNECTED;
+    }
+
+    return 0;
+  }
+
+  //printf("[handshake_success]\n");
+  _(ctx).handshake = 1;
+
+  return 1;
+}
+
 void WsTcpSocketSend(ref(WsTcpSocket) ctx,
   vector(unsigned char) data)
 {
-  ssize_t bytes = 0;
+  int res = 0;
 
-  if(_(ctx).state == 0)
+  if(_(ctx).state != STATE_CONNECTED)
   {
     return;
   }
 
-  if(_(ctx).state != 2)
+  if(!DoneHandshake(ctx))
   {
-    _WsPanic("Socket is in an invalid state");
+    return;
   }
 
-  bytes = send(_(ctx).fd, &vector_at(data, 0), vector_size(data), MSG_NOSIGNAL);
-
-  if(bytes < 0)
+  if(vector_size(data) < 1)
   {
-    if(errno != EAGAIN)
+    panic("Cannot send 0 bytes");
+  }
+
+  /*
+   * If no outgoing buffer, then set that as the new outgoing to avoid the
+   * sliding data limitation of OpenSSL.
+   */
+  if(vector_size(_(ctx).outgoing) < 1)
+  {
+    vector_insert(_(ctx).outgoing, 0, data, 0, vector_size(data));
+  }
+
+  ERR_clear_error();
+  res = SSL_write(_(ctx).ssl, &vector_at(_(ctx).outgoing, 0), vector_size(_(ctx).outgoing));
+
+  if(res < 1)
+  {
+    res = SSL_get_error(_(ctx).ssl, res);
+
+    if(res != SSL_ERROR_WANT_READ && res != SSL_ERROR_WANT_WRITE)
     {
-      _(ctx).state = 0;
+      _(ctx).state = STATE_DISCONNECTED;
     }
 
     return;
   }
 
-  /*
-   * Check for socket closed.
-   */
-  if(bytes == 0)
+  if(vector_size(data) < vector_size(_(ctx).outgoing))
   {
-    _(ctx).state = 0;
-
-    return;
+    panic("Sliding data not supported. Data is smaller");
   }
 
-  if(bytes > 0)
+  if(memcmp(&vector_at(data, 0), &vector_at(_(ctx).outgoing, 0), vector_size(_(ctx).outgoing)) != 0)
   {
-    vector_erase(data, 0, bytes);
+    panic("Sliding data not supported. Data differs");
   }
+
+  vector_erase(data, 0, vector_size(_(ctx).outgoing));
+  vector_clear(_(ctx).outgoing);
 }
 
 void WsTcpSocketRecv(ref(WsTcpSocket) ctx,
   vector(unsigned char) data)
 {
-  int bytes = 0;
+  int res = 0;
 
-  if(_(ctx).state == 0)
+  if(_(ctx).state != STATE_CONNECTED)
   {
     vector_clear(data);
-
     return;
   }
 
-  if(_(ctx).state != 2)
-  {
-    _WsPanic("Socket is in an invalid state");
-  }
-
-  bytes = vector_size(data);
-
-  bytes =
-#ifdef USE_POSIX
-    read(_(ctx).fd,
-      &vector_at(data, 0), bytes);
-#endif
-#ifdef USE_WINSOCK
-    recv(_(ctx).fd,
-      &vector_at(data, 0), bytes, 0);
-#endif
-
-  /*
-   * Check for socket closed.
-   */
-  if(bytes == 0)
+  if(!DoneHandshake(ctx))
   {
     vector_clear(data);
-    _(ctx).state = 0;
-
     return;
   }
 
-  /*
-   * Close connection if error occurred not relating to non-blocking.
-   */
-  if(bytes < 0)
+  res = vector_size(data);
+  ERR_clear_error();
+  res = SSL_read(_(ctx).ssl, &vector_at(data, 0), res);
+
+  if(res < 1)
   {
+    res = SSL_get_error(_(ctx).ssl, res);
     vector_clear(data);
 
-    if(errno != EAGAIN)
+    if(res != SSL_ERROR_WANT_READ && res != SSL_ERROR_WANT_WRITE)
     {
-      _(ctx).state = 0;
+      _(ctx).state = STATE_DISCONNECTED;
     }
 
     return;
   }
 
-  if(bytes < vector_size(data))
-  {
-    vector_resize(data, bytes);
-  }
+  vector_resize(data, res);
 }
 
-ref(WsTcpSocket) WsTcpSocketAccept(ref(WsTcpSocket) ctx)
+ref(WsTcpSocket) WsTcpSocketWrapFd(int fd, ref(WsTcpSocket) l)
 {
-#ifdef USE_POSIX
-  struct sockaddr_in client = {0};
-  int val = 1;
-  int fd = 0;
-#endif
-#ifdef USE_WINSOCK
-  unsigned long val = 1;
-#endif
   ref(WsTcpSocket) rtn = NULL;
-  int len = 0;
-
-  fd =
-#ifdef USE_POSIX
-    accept(_(ctx).fd, (struct sockaddr *)&client, (socklen_t *)&len);
-#endif
-#ifdef USE_WINSOCK
-    accept(_(ctx).fd, NULL, NULL);
-#endif
-
-  if(
-#ifdef USE_POSIX
-    fd == -1
-#endif
-#ifdef USE_WINSOCK
-    fd == INVALID_SOCKET
-#endif
-  )
-  {
-    return NULL;
-  }
 
   rtn = allocate(WsTcpSocket);
   _(rtn).fd = fd;
+  _(rtn).outgoing = vector_new(unsigned char);
 
   if(
 #ifdef USE_POSIX
@@ -412,7 +477,78 @@ ref(WsTcpSocket) WsTcpSocketAccept(ref(WsTcpSocket) ctx)
     _WsPanic("Failed to set socket to non-blocking");
   }
 
-  _(rtn).state = 2;
+  ERR_clear_error();
+  _(rtn).ssl = SSL_new(_(l).sslContext);
+
+  if(!_(rtn).ssl)
+  {
+    _WsPanic("Failed to create new SSL instance");
+  }
+
+  SSL_set_fd(_(rtn).ssl, _(rtn).fd);
+
+  _(rtn).state = STATE_CONNECTED;
+
+  return rtn;
+}
+
+ref(WsTcpSocket) WsTcpSocketAccept(ref(WsTcpSocket) ctx)
+{
+#ifdef USE_POSIX
+  struct sockaddr_in client = {0};
+  int val = 1;
+  fd_set readfds = {0};
+  struct timeval tv = {0};
+#endif
+#ifdef USE_WINSOCK
+  unsigned long val = 1;
+#endif
+  ref(WsTcpSocket) rtn = NULL;
+  int len = 0;
+  int sslResult = 0;
+  int acceptFd = 0;
+
+  FD_ZERO(&readfds);
+  FD_SET(_(ctx).fd, &readfds);
+
+  if(
+#ifdef USE_POSIX
+    select(_(ctx).fd + 1, &readfds, NULL, NULL, &tv) == -1
+#endif
+#ifdef USE_WINSOCK
+    select(_(ctx).fd + 1, &readfds, NULL, NULL, &tv) == SOCKET_ERROR
+#endif
+  )
+  {
+    _WsPanic("Failed to poll socket");
+  }
+
+  if(!FD_ISSET(_(ctx).fd, &readfds))
+  {
+    return NULL;
+  }
+
+  acceptFd =
+#ifdef USE_POSIX
+    accept(_(ctx).fd, (struct sockaddr *)&client, (socklen_t *)&len);
+#endif
+#ifdef USE_WINSOCK
+    accept(_(ctx).fd, NULL, NULL);
+#endif
+
+  if(
+#ifdef USE_POSIX
+    acceptFd == -1
+#endif
+#ifdef USE_WINSOCK
+    acceptFd == INVALID_SOCKET
+#endif
+  )
+  {
+    _WsPanic("Failed to accept socket");
+  }
+
+  rtn = WsTcpSocketWrapFd(acceptFd, ctx);
 
   return rtn;
 }

@@ -10,10 +10,11 @@ add_library(ws
   src/ws/sha1.c
   src/ws/base64.c
   src/ws/WebSocket.c
-  src/ws/TcpSocket.c
+  #src/ws/TcpSocket.c
+  src/ws/SslSocket.c
   src/ws/HttpHeader.c
 )
-target_link_libraries(ws)
+target_link_libraries(ws ssl crypto)
 
 add_executable(test_socket
   src/tests/socket.c

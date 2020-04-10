@@ -92,18 +92,22 @@ void _WsConnectionDestroy(ref(WsConnection) ctx)
 
 void _WsPollConnectionRequests(ref(WsServer) server)
 {
+  ref(WsTcpSocket) sock = NULL;
   ref(WsConnection) conn = NULL;
 
   /*
    * Keep processing whilst clients waiting
    */
-  while(WsTcpSocketReady(_(server).socket) == 1)
+  while(1)
   {
     /*
      * Wrap the socket as a connection and add to list
      */
+    sock = WsTcpSocketAccept(_(server).socket);
+    if(!sock) break;
+
     conn = allocate(WsConnection);
-    _(conn).socket = WsTcpSocketAccept(_(server).socket);
+    _(conn).socket = sock;
     _(conn).buffer = vector_new(unsigned char);
     _(conn).incoming = vector_new(unsigned char);
     _(conn).outgoing = vector_new(unsigned char);
@@ -451,18 +455,22 @@ int _WsConnectionPoll(ref(WsServer) server, ref(WsConnection) connection,
    * Return if no data is waiting but only if the websocket last packet was
    * incomplete. There might be more frames after it.
    */
-  if(WsTcpSocketReady(_(connection).socket) == 0)
+  if(_(connection).state == WS_STATE_WEBSOCKET && !_(connection).incomplete)
   {
-    if(_(connection).state == WS_STATE_WEBSOCKET && !_(connection).incomplete)
-    {
-      return _WsConnectionProcessWebSocket(server, connection, event);
-    }
-
-    return 0;
+    return _WsConnectionProcessWebSocket(server, connection, event);
   }
 
   vector_resize(_(connection).buffer, 1024);
   WsTcpSocketRecv(_(connection).socket, _(connection).buffer);
+
+  /*
+   * No data was waiting. Early return.
+   */
+  if(vector_size(_(connection).buffer) < 1)
+  {
+    return 0;
+  }
+
   _(connection).incomplete = 0;
 
   /*

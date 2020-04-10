@@ -113,6 +113,7 @@ int main()
 
   while(running)
   {
+    //while(WsServerPoll(server, 0, &event))
     while(WsServerPoll(server, 1000, &event))
     {
       if(event.type == WS_HTTP_REQUEST)
