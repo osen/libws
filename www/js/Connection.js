@@ -36,19 +36,32 @@ function Connection(core)
 
   self.connect = function()
   {
+    var prot = "";
     var url = "" + window.location;
 
     for(var ci = 0; ci < url.length; ci++)
     {
       if(url[ci] == ':')
       {
+        prot = url.substring(0, ci);
         url = url.substring(ci);
         break;
       }
     }
 
-    url = "wss" + url;
-    //url = "ws" + url;
+    if(prot == "https")
+    {
+      url = "wss" + url;
+    }
+    else if(prot == "http")
+    {
+      url = "ws" + url;
+    }
+    else
+    {
+      throw "Failed to determine websocket protocol";
+    }
+
     self.socket = new WebSocket(url);
   
     self.socket.onclose = self.onClose;
