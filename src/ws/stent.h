@@ -35,7 +35,7 @@
  * similar to the ref(T) MACRO but avoids the struct requirement.
  *****************************************************************************/
 #define refvoid \
-  void **
+  char **
 
 /*****************************************************************************
  * ref(T)
@@ -192,7 +192,7 @@ void _vector_insert(vector(void) ptr, size_t before,
  ***************************************************/
 
 #define refvoid \
-  void *
+  char *
 
 #define ref(T) \
   struct T *
